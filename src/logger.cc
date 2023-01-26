@@ -3,7 +3,7 @@
 #include <mutex>
 #include "logger.h"
 
-namespace metis {
+namespace common {
 
 std::string
 IndentMultiline(const std::string& str, const size_t indent)
@@ -30,22 +30,22 @@ IndentMultiline(const std::string& str, const size_t indent)
   return mstr;
 }
 
-MetisLogger&
-operator<<(MetisLogger& logger, std::ostream& (*os)(std::ostream&))
+Logger&
+operator<<(Logger& logger, std::ostream& (*os)(std::ostream&))
 {
   std::cout << os;
   return logger;
 }
 
-MetisLogger&
-operator<<(const std::shared_ptr<MetisLogger>& logger, std::ostream& (*os)(std::ostream&))
+Logger&
+operator<<(const std::shared_ptr<Logger>& logger, std::ostream& (*os)(std::ostream&))
 {
   std::cout << os;
   return *logger;
 }
 
 void
-MetisStdoutLogger::Log(const std::string& msg, size_t indent, bool endline) const
+StdoutLogger::Log(const std::string& msg, size_t indent, bool endline) const
 {
   static std::mutex mu;
   std::lock_guard<std::mutex> lk(mu);
@@ -62,4 +62,4 @@ MetisStdoutLogger::Log(const std::string& msg, size_t indent, bool endline) cons
   }
 }
 
-} // namespace metis
+} // namespace common

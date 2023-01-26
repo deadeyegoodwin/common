@@ -6,14 +6,14 @@
 
 using json = nlohmann::json;
 
-namespace metis {
+namespace common {
 
 //
-// MetisSettings
+// Settings
 //
 // Settings cannot be changed except by FromJson and FromJsonString.
 //
-class MetisSettings {
+class Settings {
 public:
   // Indicate a setting name is allowed and the default value.
   void AllowedSetting(const std::string& name, bool def);
@@ -57,12 +57,12 @@ protected:
 };
 
 //
-// MetisMutableSettings
+// MutableSettings
 //
-// Like MetisSettings except settings can be changed with SetSetting
+// Like Settings except settings can be changed with SetSetting
 // functions.
 //
-class MetisMutableSettings : public MetisSettings {
+class MutableSettings : public Settings {
 public:
   void SetSetting(const std::string& name, const bool v);
   void SetSetting(const std::string& name, const int32_t v);
@@ -71,4 +71,4 @@ public:
   void SetSetting(const std::string& name, const char* v);
 };
 
-} // namespace metis
+} // namespace common

@@ -6,16 +6,16 @@
 #include <sstream>
 #include <string>
 
-namespace metis {
+namespace common {
 
 // Utility method to indent every line of a string.
 std::string
 IndentMultiline(const std::string& str, const size_t indent);
 
 //
-// MetisLogger
+// Logger
 //
-class MetisLogger {
+class Logger {
 public:
   bool IsQuietEnabled() const { return quiet_; }
   bool IsInfoEnabled() const { return !quiet_; }
@@ -46,29 +46,29 @@ private:
 };
 
 template <class T>
-MetisLogger& operator<<(MetisLogger& logger, const T& t)
+Logger& operator<<(Logger& logger, const T& t)
 {
   std::cout << t;
   return logger;
 }
 
 template <class T>
-MetisLogger& operator<<(const std::shared_ptr<MetisLogger>& logger, const T& t)
+Logger& operator<<(const std::shared_ptr<Logger>& logger, const T& t)
 {
   std::cout << t;
   return *logger;
 }
 
 // Handle std::endl
-MetisLogger& operator<<(MetisLogger& logger, std::ostream& (*os)(std::ostream&));
-MetisLogger& operator<<(const std::shared_ptr<MetisLogger>& logger, std::ostream& (*os)(std::ostream&));
+Logger& operator<<(Logger& logger, std::ostream& (*os)(std::ostream&));
+Logger& operator<<(const std::shared_ptr<Logger>& logger, std::ostream& (*os)(std::ostream&));
 
 //
-// MetisStdoutLogger
+// StdoutLogger
 //
-class MetisStdoutLogger : public MetisLogger {
+class StdoutLogger : public Logger {
 public:
   virtual void Log(const std::string& msg, size_t indent=0, bool endline=false) const;
 };
 
-} // namespace metis
+} // namespace common

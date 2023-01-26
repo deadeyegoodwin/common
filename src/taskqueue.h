@@ -9,10 +9,10 @@
 #include <thread>
 #include "error.h"
 
-namespace metis {
+namespace common {
 
 //
-// MetisTaskQueue
+// TaskQueue
 //
 // A thread pool that executes enqueued tasks and then returns the
 // completed tasks on another queue. A task object must be wrapped in
@@ -21,10 +21,10 @@ namespace metis {
 // the task-queue will invoke to perform the task.
 //
 template <class T>
-class MetisTaskQueue {
+class TaskQueue {
 public:
-  MetisTaskQueue(const size_t worker_cnt);
-  ~MetisTaskQueue();
+  TaskQueue(const size_t worker_cnt);
+  ~TaskQueue();
 
   size_t InFlightTaskCount() const;
   void Enqueue(std::unique_ptr<T> task);
@@ -46,10 +46,10 @@ private:
 };
 
 template <class T>
-MetisTaskQueue<T>::MetisTaskQueue(const size_t worker_cnt)
+TaskQueue<T>::TaskQueue(const size_t worker_cnt)
 {
   if (worker_cnt == 0) {
-    throw MetisException("MetisTaskQueue requires at least 1 worker");
+    throw Exception("TaskQueue requires at least 1 worker");
   }
 
   // The "work loop" for each thread. Waits for new task to be
@@ -92,7 +92,7 @@ MetisTaskQueue<T>::MetisTaskQueue(const size_t worker_cnt)
 }
 
 template <class T>
-MetisTaskQueue<T>::~MetisTaskQueue()
+TaskQueue<T>::~TaskQueue()
 {
   exiting_ = true;
   pending_queue_cv_.notify_all();
@@ -105,14 +105,14 @@ MetisTaskQueue<T>::~MetisTaskQueue()
 
 template <class T>
 size_t
-MetisTaskQueue<T>::InFlightTaskCount() const
+TaskQueue<T>::InFlightTaskCount() const
 {
   return in_flight_task_count_;
 }
 
 template <class T>
 void
-MetisTaskQueue<T>::Enqueue(std::unique_ptr<T> task)
+TaskQueue<T>::Enqueue(std::unique_ptr<T> task)
 {
   in_flight_task_count_ += 1;
 
@@ -123,7 +123,7 @@ MetisTaskQueue<T>::Enqueue(std::unique_ptr<T> task)
 
 template <class T>
 bool
-MetisTaskQueue<T>::Dequeue(std::unique_ptr<T>& task)
+TaskQueue<T>::Dequeue(std::unique_ptr<T>& task)
 {
   std::unique_lock<std::mutex> lk(completed_queue_mu_);
   completed_queue_cv_.wait(lk, [&]() -> bool { return !completed_queue_.empty() || exiting_; });
@@ -141,8 +141,8 @@ MetisTaskQueue<T>::Dequeue(std::unique_ptr<T>& task)
 
 template <class T>
 bool
-MetisTaskQueue<T>::Dequeue(std::unique_ptr<T>& task,
-                           const std::chrono::duration<uint32_t, std::milli>& timeout)
+TaskQueue<T>::Dequeue(std::unique_ptr<T>& task,
+                      const std::chrono::duration<uint32_t, std::milli>& timeout)
 {
   std::unique_lock<std::mutex> lk(completed_queue_mu_);
   if (!completed_queue_cv_.wait_for(
@@ -161,4 +161,4 @@ MetisTaskQueue<T>::Dequeue(std::unique_ptr<T>& task,
   return true;
 }
 
-} // namespace metis
+} // namespace common

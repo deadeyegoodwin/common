@@ -4,15 +4,15 @@
 #include <stdint.h>
 #include <random>
 
-namespace metis {
+namespace common {
 
 //
-// MetisRandom
+// Random
 //
-class MetisRandom {
+class Random {
 public:
-  MetisRandom() : MetisRandom(rdev_()) { }
-  MetisRandom(int32_t seed) : seed_(seed), generator_(seed) { }
+  Random() : Random(rdev_()) { }
+  Random(int32_t seed) : seed_(seed), generator_(seed) { }
 
   int32_t Seed() const { return seed_; }
 
@@ -28,4 +28,4 @@ private:
   std::mt19937 generator_;
 };
 
-} // namespace metis
+} // namespace common

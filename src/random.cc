@@ -2,8 +2,8 @@
 
 #include "random.h"
 
-namespace metis {
+namespace common {
 
-std::random_device MetisRandom::rdev_;
+std::random_device Random::rdev_;
 
-} // namespace metis
+} // namespace common
