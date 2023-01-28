@@ -2,6 +2,7 @@
 #pragma once
 
 #include <nlohmann/json.hpp>
+#include <set>
 #include <unordered_map>
 
 using json = nlohmann::json;
@@ -22,8 +23,11 @@ public:
   void AllowedSetting(const std::string& name, const std::string& def);
   void AllowedSetting(const std::string& name, const char* def);
 
-  // Initialize from JSON. Error if JSON specifies a non-allowed
-  // setting name of datatype.
+  // Indicate a JSON object key is allowed but is not a setting.
+  void AllowedNonSetting(const std::string& name);
+
+  // Initialize from JSON object. Error if JSON specifies a
+  // non-allowed setting name or datatype.
   void FromJson(const json& j);
   void FromJsonString(const std::string& js);
 
@@ -54,6 +58,7 @@ protected:
   std::unordered_map<std::string, int32_t> integer_settings_;
   std::unordered_map<std::string, float> float_settings_;
   std::unordered_map<std::string, std::string> string_settings_;
+  std::set<std::string> non_settings_;
 };
 
 //

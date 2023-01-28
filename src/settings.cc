@@ -63,6 +63,17 @@ Settings::AllowedSetting(const std::string& name, const char* def)
 }
 
 void
+Settings::AllowedNonSetting(const std::string& name)
+{
+  const auto& it = non_settings_.find(name);
+  if (it != non_settings_.end()) {
+    throw Exception("non-setting initialized multiple times: '" + name + "'");
+  }
+
+  non_settings_.insert(name);
+}
+
+void
 Settings::FromJson(const json& j)
 {
   if (!j.is_object()) {
@@ -71,6 +82,12 @@ Settings::FromJson(const json& j)
 
   for (auto& it : j.items()) {
     const std::string& name = it.key();
+
+    const auto& ns_it = non_settings_.find(name);
+    if (ns_it != non_settings_.end()) {
+      continue;
+    }
+
     if (it.value().is_boolean()) {
       bool v; it.value().get_to(v); UpdateSetting(name, v);
     }
@@ -80,8 +97,11 @@ Settings::FromJson(const json& j)
     else if (it.value().is_number_float()) {
       float v; it.value().get_to(v); UpdateSetting(name, v);
     }
-    else {
+    else if (it.value().is_string()) {
       std::string v; it.value().get_to(v); UpdateSetting(name, v);
+    }
+    else {
+      throw Exception("unexpected setting '" + name + "'");
     }
   }
 }
