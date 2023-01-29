@@ -141,6 +141,34 @@ Settings::Setting(const std::string& name, int32_t& v) const
 }
 
 void
+Settings::Setting(const std::string& name, uint32_t& v) const
+{
+  const auto& it = integer_settings_.find(name);
+  if (it == integer_settings_.end()) {
+    throw Exception("unknown integer setting '" + name + "'");
+  }
+  if (it->second < 0) {
+    throw Exception("expecting integer setting '" + name + "' to be >= 0");
+  }
+
+  v = (uint32_t)it->second;
+}
+
+void
+Settings::Setting(const std::string& name, size_t& v) const
+{
+  const auto& it = integer_settings_.find(name);
+  if (it == integer_settings_.end()) {
+    throw Exception("unknown integer setting '" + name + "'");
+  }
+  if (it->second < 0) {
+    throw Exception("expecting integer setting '" + name + "' to be >= 0");
+  }
+
+  v = (size_t)it->second;
+}
+
+void
 Settings::Setting(const std::string& name, float& v) const
 {
   const auto& it = float_settings_.find(name);
@@ -226,6 +254,34 @@ Settings::UpdateSetting(const std::string& name, const int32_t v)
   }
 
   it->second = v;
+}
+
+void
+Settings::UpdateSetting(const std::string& name, const uint32_t v)
+{
+  const auto& it = integer_settings_.find(name);
+  if (it == integer_settings_.end()) {
+    throw Exception("unable to set unknown integer setting '" + name + "'");
+  }
+  if (v > std::numeric_limits<int32_t>::max()) {
+    throw Exception("out-of-range value for integer setting '" + name + "'");
+  }
+
+  it->second = (int32_t)v;
+}
+
+void
+Settings::UpdateSetting(const std::string& name, const size_t v)
+{
+  const auto& it = integer_settings_.find(name);
+  if (it == integer_settings_.end()) {
+    throw Exception("unable to set unknown integer setting '" + name + "'");
+  }
+  if (v > std::numeric_limits<int32_t>::max()) {
+    throw Exception("out-of-range value for integer setting '" + name + "'");
+  }
+
+  it->second = (size_t)v;
 }
 
 void
@@ -323,6 +379,18 @@ MutableSettings::SetSetting(const std::string& name, const bool v)
 
 void
 MutableSettings::SetSetting(const std::string& name, const int32_t v)
+{
+  UpdateSetting(name, v);
+}
+
+void
+MutableSettings::SetSetting(const std::string& name, const uint32_t v)
+{
+  UpdateSetting(name, v);
+}
+
+void
+MutableSettings::SetSetting(const std::string& name, const size_t v)
 {
   UpdateSetting(name, v);
 }

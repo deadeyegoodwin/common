@@ -37,6 +37,8 @@ public:
   // Exception if setting is not found.
   void Setting(const std::string& name, bool& v) const;
   void Setting(const std::string& name, int32_t& v) const;
+  void Setting(const std::string& name, uint32_t& v) const;
+  void Setting(const std::string& name, size_t& v) const;
   void Setting(const std::string& name, float& v) const;
   void Setting(const std::string& name, std::string& v) const;
   bool BooleanSetting(const std::string& name) const;
@@ -50,6 +52,8 @@ public:
 protected:
   void UpdateSetting(const std::string& name, const bool v);
   void UpdateSetting(const std::string& name, const int32_t v);
+  void UpdateSetting(const std::string& name, const uint32_t v);
+  void UpdateSetting(const std::string& name, const size_t v);
   void UpdateSetting(const std::string& name, const float v);
   void UpdateSetting(const std::string& name, const std::string& v);
   void UpdateSetting(const std::string& name, const char* v);
@@ -71,6 +75,8 @@ class MutableSettings : public Settings {
 public:
   void SetSetting(const std::string& name, const bool v);
   void SetSetting(const std::string& name, const int32_t v);
+  void SetSetting(const std::string& name, const uint32_t v);
+  void SetSetting(const std::string& name, const size_t v);
   void SetSetting(const std::string& name, const float v);
   void SetSetting(const std::string& name, const std::string& v);
   void SetSetting(const std::string& name, const char* v);
