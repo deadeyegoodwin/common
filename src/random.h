@@ -11,8 +11,9 @@ namespace common {
 //
 class Random {
 public:
-  Random() : Random(rdev_()) { }
-  Random(int32_t seed) : seed_(seed), generator_(seed) { }
+  // With no argument or 0 (zero) argument, the random generator is
+  // initialized with a random seed.
+  Random(int32_t seed=0) : seed_((seed == 0) ? rdev_() : seed), generator_(seed_) { }
 
   int32_t Seed() const { return seed_; }
 
