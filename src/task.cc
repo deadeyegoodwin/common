@@ -1,52 +1,10 @@
 // Copyright 2023, David Goodwin. All rights reserved.
-#pragma once
 
-#include <atomic>
-#include <condition_variable>
-#include <chrono>
-#include <deque>
-#include <memory>
-#include <thread>
-#include "error.h"
+#include "task.h"
 
 namespace common {
 
-//
-// TaskQueue
-//
-// A thread pool that executes enqueued tasks and then returns the
-// completed tasks on another queue. A task object must be wrapped in
-// a unique_ptr for enqueuing so that ownership is clearly passed to
-// the task queue. The task must implement "void operator()()" which
-// the task-queue will invoke to perform the task.
-//
-template <class T>
-class TaskQueue {
-public:
-  TaskQueue(const size_t worker_cnt);
-  ~TaskQueue();
-
-  size_t InFlightTaskCount() const;
-  void Enqueue(std::unique_ptr<T> task);
-  bool Dequeue(std::unique_ptr<T>& task);
-  bool Dequeue(std::unique_ptr<T>& task, const std::chrono::duration<uint32_t, std::milli>& timeout);
-
-private:
-  std::vector<std::thread> work_threads_;
-  std::atomic<bool> exiting_ { false };
-  std::atomic<size_t> in_flight_task_count_ { 0 };
-
-  std::mutex pending_queue_mu_;
-  std::condition_variable pending_queue_cv_;
-  std::deque<std::unique_ptr<T>> pending_queue_;
-
-  std::mutex completed_queue_mu_;
-  std::condition_variable completed_queue_cv_;
-  std::deque<std::unique_ptr<T>> completed_queue_;
-};
-
-template <class T>
-TaskQueue<T>::TaskQueue(const size_t worker_cnt)
+TaskQueue::TaskQueue(const size_t worker_cnt)
 {
   if (worker_cnt == 0) {
     throw Exception("TaskQueue requires at least 1 worker");
@@ -57,7 +15,7 @@ TaskQueue<T>::TaskQueue(const size_t worker_cnt)
   // completed queue.
   const auto work_loop = [this]() {
     while (true) {
-      std::unique_ptr<T> task;
+      std::unique_ptr<Task> task;
 
       // Get pending task...
       {
@@ -73,7 +31,7 @@ TaskQueue<T>::TaskQueue(const size_t worker_cnt)
 
       // Execute...
       if (task != nullptr) {
-        (*task)();
+        task->TaskInvoke();
       }
 
       // Return completed task...
@@ -91,8 +49,7 @@ TaskQueue<T>::TaskQueue(const size_t worker_cnt)
   }
 }
 
-template <class T>
-TaskQueue<T>::~TaskQueue()
+TaskQueue::~TaskQueue()
 {
   exiting_ = true;
   pending_queue_cv_.notify_all();
@@ -103,16 +60,14 @@ TaskQueue<T>::~TaskQueue()
   completed_queue_cv_.notify_all();
 }
 
-template <class T>
 size_t
-TaskQueue<T>::InFlightTaskCount() const
+TaskQueue::InFlightTaskCount() const
 {
   return in_flight_task_count_;
 }
 
-template <class T>
 void
-TaskQueue<T>::Enqueue(std::unique_ptr<T> task)
+TaskQueue::Enqueue(std::unique_ptr<Task> task)
 {
   in_flight_task_count_ += 1;
 
@@ -121,9 +76,8 @@ TaskQueue<T>::Enqueue(std::unique_ptr<T> task)
   pending_queue_cv_.notify_one();
 }
 
-template <class T>
 bool
-TaskQueue<T>::Dequeue(std::unique_ptr<T>& task)
+TaskQueue::Dequeue(std::unique_ptr<Task>& task)
 {
   std::unique_lock<std::mutex> lk(completed_queue_mu_);
   completed_queue_cv_.wait(lk, [&]() -> bool { return !completed_queue_.empty() || exiting_; });
@@ -139,10 +93,9 @@ TaskQueue<T>::Dequeue(std::unique_ptr<T>& task)
   return true;
 }
 
-template <class T>
 bool
-TaskQueue<T>::Dequeue(std::unique_ptr<T>& task,
-                      const std::chrono::duration<uint32_t, std::milli>& timeout)
+TaskQueue::Dequeue(std::unique_ptr<Task>& task,
+                   const std::chrono::duration<uint32_t, std::milli>& timeout)
 {
   std::unique_lock<std::mutex> lk(completed_queue_mu_);
   if (!completed_queue_cv_.wait_for(
