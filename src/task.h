@@ -10,6 +10,10 @@
 #include <vector>
 #include "error.h"
 
+extern "C" {
+#include "ck_fifo.h"
+}
+
 namespace common {
 
 //
@@ -53,6 +57,103 @@ private:
   std::mutex completed_queue_mu_;
   std::condition_variable completed_queue_cv_;
   std::deque<std::unique_ptr<Task>> completed_queue_;
+};
+
+//
+// TaskLocklessMultiQueueBase
+//
+// Base class for all TaskLocklessMultiQueue<T> classes. Needed to
+// maintain a single, thread-local "entry pool" for each thread that
+// is shared across all the TaskLocklessMultiQueue<T> template
+// classes.
+//
+class TaskLocklessMultiQueueBase {
+protected:
+  ck_fifo_mpmc_entry_t* NewEntry() {
+    ck_fifo_mpmc_entry_t* entry;
+    if (entry_pool_ != nullptr) {
+      entry = entry_pool_;
+      entry_pool_ = (ck_fifo_mpmc_entry_t*)entry_pool_->value;
+    }
+    else {
+      entry = (ck_fifo_mpmc_entry_t*)malloc(sizeof(ck_fifo_mpmc_entry_t));
+    }
+    return entry;
+  }
+
+  void ReleaseEntry(ck_fifo_mpmc_entry_t* entry) {
+    if (entry != nullptr) {
+      entry->value = entry_pool_;
+      entry_pool_ = entry;
+    }
+  }
+
+private:
+  static thread_local ck_fifo_mpmc_entry_t* entry_pool_;
+};
+
+//
+// TaskLocklessMultiQueue
+//
+// A lockless, multi-producer / multi-consumer queue.  A task object
+// must be wrapped in a std::unique_ptr for enqueuing/dequeuing so
+// that ownership is clearly passed to/from the task queue (and
+// because the underlying implementation only supports pointer
+// payload).  This class wraps concurrencykit's FIFO-mpmc
+// implementation, see concurrencykit.org.
+//
+template <class T>
+class TaskLocklessMultiQueue : public TaskLocklessMultiQueueBase {
+public:
+  static_assert(std::is_base_of<Task,T>::value);
+
+  TaskLocklessMultiQueue() {
+    ck_fifo_mpmc_entry_t* init_stub = NewEntry();
+    ck_fifo_mpmc_init(&fifo_, init_stub);
+  }
+
+  ~TaskLocklessMultiQueue() {
+    ck_fifo_mpmc_entry_t* garbage;
+    ck_fifo_mpmc_deinit(&fifo_, &garbage);
+    ReleaseEntry(garbage);
+  }
+
+  void Enqueue(std::unique_ptr<T> task) {
+    ck_fifo_mpmc_entry_t* entry = NewEntry();
+    ck_fifo_mpmc_enqueue(&fifo_, entry, task.release());
+  }
+
+  bool TryEnqueue(std::unique_ptr<T> task) {
+    ck_fifo_mpmc_entry_t* entry = NewEntry();
+    const bool res = ck_fifo_mpmc_tryenqueue(&fifo_, entry, task.release());
+    ReleaseEntry(entry);
+    return res;
+  }
+
+  bool Dequeue(std::unique_ptr<T>& task) {
+    void* value;
+    ck_fifo_mpmc_entry_t* garbage;
+    const bool res = ck_fifo_mpmc_dequeue(&fifo_, &value, &garbage);
+    ReleaseEntry(garbage);
+    if (res) {
+      task.reset(reinterpret_cast<T*>(value));
+    }
+    return res;
+  }
+
+  bool TryDequeue(std::unique_ptr<T>& task) {
+    void* value;
+    ck_fifo_mpmc_entry_t* garbage;
+    const bool res = ck_fifo_mpmc_trydequeue(&fifo_, &value, &garbage);
+    ReleaseEntry(garbage);
+    if (res) {
+      task.reset(reinterpret_cast<T*>(value));
+    }
+    return res;
+  }
+
+private:
+  ck_fifo_mpmc_t fifo_;
 };
 
 } // namespace common

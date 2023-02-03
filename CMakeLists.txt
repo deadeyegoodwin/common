@@ -12,14 +12,14 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CK_REPO_TAG "master" CACHE STRING "Tag for concurrencykit repo")
+set(CK_REPO_TAG "cplusplus" CACHE STRING "Tag for concurrencykit repo")
 
 #
 # concurrency kit
 #
 ExternalProject_Add(ck
   PREFIX ck
-  GIT_REPOSITORY https://github.com/concurrencykit/ck.git
+  GIT_REPOSITORY git@github.com:deadeyegoodwin/ck.git
   GIT_TAG ${CK_REPO_TAG}
   GIT_SHALLOW ON
   GIT_PROGRESS ON
