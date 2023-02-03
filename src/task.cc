@@ -4,7 +4,7 @@
 
 namespace common {
 
-thread_local ck_fifo_mpmc_entry_t* TaskLocklessMultiQueueBase::entry_pool_ = nullptr;
+thread_local ck_fifo_mpmc_entry_t* TaskLocklessMultiQueue::entry_pool_ = nullptr;
 
 TaskPool::TaskPool(const size_t worker_cnt)
 {
