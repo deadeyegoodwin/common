@@ -89,8 +89,13 @@ public:
 
   bool TryEnqueue(std::unique_ptr<Task> task) {
     ck_fifo_mpmc_entry_t* entry = NewEntry();
-    const bool res = ck_fifo_mpmc_tryenqueue(&fifo_, entry, task.release());
-    ReleaseEntry(entry);
+    const bool res = ck_fifo_mpmc_tryenqueue(&fifo_, entry, task.get());
+    if (res) {
+      task.release();
+    }
+    else {
+      ReleaseEntry(entry);
+    }
     return res;
   }
 
@@ -98,10 +103,10 @@ public:
     void* value;
     ck_fifo_mpmc_entry_t* garbage;
     const bool res = ck_fifo_mpmc_dequeue(&fifo_, &value, &garbage);
-    ReleaseEntry(garbage);
     if (res) {
       task.reset(reinterpret_cast<Task*>(value));
     }
+    ReleaseEntry(garbage);
     return res;
   }
 
@@ -109,10 +114,10 @@ public:
     void* value;
     ck_fifo_mpmc_entry_t* garbage;
     const bool res = ck_fifo_mpmc_trydequeue(&fifo_, &value, &garbage);
-    ReleaseEntry(garbage);
     if (res) {
       task.reset(reinterpret_cast<Task*>(value));
     }
+    ReleaseEntry(garbage);
     return res;
   }
 
