@@ -17,6 +17,8 @@ IndentMultiline(const std::string& str, const size_t indent);
 //
 class Logger {
 public:
+  virtual ~Logger() = default;
+
   bool IsQuietEnabled() const { return quiet_; }
   bool IsInfoEnabled() const { return !quiet_; }
   bool IsVerboseEnabled() const { return verbose_; }

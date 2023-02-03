@@ -11,10 +11,13 @@
 #include "error.h"
 
 extern "C" {
+#include "ck_barrier.h"
 #include "ck_fifo.h"
 }
 
 namespace common {
+
+class TaskTimewheelPool;
 
 //
 // Task
@@ -23,27 +26,48 @@ namespace common {
 //
 class Task {
 public:
-  virtual void TaskInvoke() = 0;
+  virtual ~Task() = default;
+
+  // Invoke task and transfer ownership of the task to the Invoke()
+  // function. Invoke() should return true to indicate that it is
+  // retaining ownership of the task object, and return false to
+  // indicate that it is returning ownership of the task object to the
+  // caller.
+  virtual bool Invoke() = 0;
+
+private:
+  friend class TaskTimewheelPool;
+
+  // Generic payload that can be used by TaskPool,
+  // TaskLocklessMultiQueue, TaskTimewheelPool, etc.
+  size_t payload_;
 };
 
 //
 // TaskPool
 //
 // A thread pool that executes enqueued tasks and then returns the
-// completed tasks on another queue. A task object must be wrapped in
-// a std::unique_ptr for enqueuing/dequeuing so that ownership is
-// clearly passed to/from the task queue. The task must derive from
-// class Task.
+// completed tasks on another queue (the "completed" queue). A task
+// object must be wrapped in a std::unique_ptr for enqueuing/dequeuing
+// so that ownership is clearly passed to/from the pool. The task must
+// derive from class Task.
+//
+// If Task::Invoke() returns false, indicating that TaskPool retains
+// ownership of the task object, TaskPool returns that task on the
+// completed queue. This is the normal behavior. If Task::Invoke()
+// returns true, then TaskPool no longer has ownership of the task
+// object and so will *not* return the task on the completed queue.
 //
 class TaskPool {
 public:
-  TaskPool(const size_t worker_cnt);
+  TaskPool(const size_t worker_count);
   ~TaskPool();
 
   size_t InFlightTaskCount() const;
   void Enqueue(std::unique_ptr<Task> task);
   bool Dequeue(std::unique_ptr<Task>& task);
-  bool Dequeue(std::unique_ptr<Task>& task, const std::chrono::duration<uint32_t, std::milli>& timeout);
+  bool Dequeue(std::unique_ptr<Task>& task,
+               const std::chrono::duration<uint32_t, std::milli>& timeout);
 
 private:
   std::vector<std::thread> work_threads_;
@@ -82,6 +106,8 @@ public:
     ReleaseEntry(garbage);
   }
 
+  bool IsEmpty() { return CK_FIFO_MPMC_ISEMPTY(&fifo_); }
+
   void Enqueue(std::unique_ptr<Task> task) {
     ck_fifo_mpmc_entry_t* entry = NewEntry();
     ck_fifo_mpmc_enqueue(&fifo_, entry, task.release());
@@ -101,7 +127,7 @@ public:
 
   bool Dequeue(std::unique_ptr<Task>& task) {
     void* value;
-    ck_fifo_mpmc_entry_t* garbage;
+    ck_fifo_mpmc_entry_t* garbage = nullptr;
     const bool res = ck_fifo_mpmc_dequeue(&fifo_, &value, &garbage);
     if (res) {
       task.reset(reinterpret_cast<Task*>(value));
@@ -112,7 +138,7 @@ public:
 
   bool TryDequeue(std::unique_ptr<Task>& task) {
     void* value;
-    ck_fifo_mpmc_entry_t* garbage;
+    ck_fifo_mpmc_entry_t* garbage = nullptr;
     const bool res = ck_fifo_mpmc_trydequeue(&fifo_, &value, &garbage);
     if (res) {
       task.reset(reinterpret_cast<Task*>(value));
@@ -142,7 +168,63 @@ private:
   }
 
   static thread_local ck_fifo_mpmc_entry_t* entry_pool_;
-  ck_fifo_mpmc_t fifo_;
+  ck_fifo_mpmc_t fifo_ CK_CC_CACHELINE;
+};
+
+//
+// TaskTimewheelPool
+//
+// A thread pool that executes enqueued tasks. Tasks can be enqueued
+// to execute immediately, or at a time in the future. Future time is
+// indicated by an positive integer value indicating the time delta to
+// when the task should execute. TaskTimewheelPool does not itself
+// assign any actual time duration to a time delta value, it simply
+// makes sure that all tasks enqueued for execution at time N are
+// invoked (and TaskInvoke returns) before tasks at time N+1.
+//
+// A task object must be wrapped in a std::unique_ptr for enqueuing so
+// that ownership is clearly passed to the pool. The task must derive
+// from class Task.
+//
+// If TaskInvoke() returns true, indicating that the task has taken
+// ownership of its own Task object, then TaskTimewheelPool does not
+// perform any futher action on that task. If TaskInvoke() returns
+// false then TaskTimewheelPool retains ownership of the task,
+// however, because TaskTimewheelPool has no futher use for the task,
+// it will simply delete it.
+//
+class TaskTimewheelPool {
+public:
+  TaskTimewheelPool(const size_t worker_count_, const size_t time_bucket_count);
+  ~TaskTimewheelPool();
+
+  void Drain();
+  void Pause();
+  void Run();
+
+  void Enqueue(std::unique_ptr<Task> task, uint32_t time_delta);
+
+private:
+  void WorkerThread(const bool is_controller);
+
+  static constexpr uint32_t CONTROL_RUN = 0;
+  static constexpr uint32_t CONTROL_EXIT = 1;
+  static constexpr uint32_t CONTROL_PAUSE = 2;
+  static constexpr uint32_t CONTROL_DRAIN = 3;
+  uint32_t control_request_ CK_CC_CACHELINE;
+  uint64_t exit_generation_ CK_CC_CACHELINE;
+  std::mutex pause_mu_;
+  std::condition_variable pause_cv_;
+
+  const size_t worker_count_;
+  std::vector<std::thread> work_threads_;
+
+  const size_t bucket_count_;
+  std::vector<TaskLocklessMultiQueue> time_buckets_;
+
+  TaskLocklessMultiQueue input_queue_ CK_CC_CACHELINE;
+  ck_barrier_centralized_t next_barrier_ CK_CC_CACHELINE;
+  uint32_t in_flight_task_count_ CK_CC_CACHELINE;
 };
 
 } // namespace common

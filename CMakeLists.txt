@@ -79,3 +79,15 @@ target_link_libraries(
     nlohmann_json::nlohmann_json
     ck-library
 )
+
+#
+# Test target
+#
+add_custom_target(
+  common-test
+  COMMAND ${CMAKE_CTEST_COMMAND} -j8 --timeout 15 --output-on-failure
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/test
+  COMMENT "Running common tests"
+  DEPENDS common-library
+)
+add_subdirectory(test)
