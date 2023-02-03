@@ -4,10 +4,10 @@
 
 namespace common {
 
-TaskQueue::TaskQueue(const size_t worker_cnt)
+TaskPool::TaskPool(const size_t worker_cnt)
 {
   if (worker_cnt == 0) {
-    throw Exception("TaskQueue requires at least 1 worker");
+    throw Exception("TaskPool requires at least 1 worker");
   }
 
   // The "work loop" for each thread. Waits for new task to be
@@ -49,7 +49,7 @@ TaskQueue::TaskQueue(const size_t worker_cnt)
   }
 }
 
-TaskQueue::~TaskQueue()
+TaskPool::~TaskPool()
 {
   exiting_ = true;
   pending_queue_cv_.notify_all();
@@ -61,13 +61,13 @@ TaskQueue::~TaskQueue()
 }
 
 size_t
-TaskQueue::InFlightTaskCount() const
+TaskPool::InFlightTaskCount() const
 {
   return in_flight_task_count_;
 }
 
 void
-TaskQueue::Enqueue(std::unique_ptr<Task> task)
+TaskPool::Enqueue(std::unique_ptr<Task> task)
 {
   in_flight_task_count_ += 1;
 
@@ -77,7 +77,7 @@ TaskQueue::Enqueue(std::unique_ptr<Task> task)
 }
 
 bool
-TaskQueue::Dequeue(std::unique_ptr<Task>& task)
+TaskPool::Dequeue(std::unique_ptr<Task>& task)
 {
   std::unique_lock<std::mutex> lk(completed_queue_mu_);
   completed_queue_cv_.wait(lk, [&]() -> bool { return !completed_queue_.empty() || exiting_; });
@@ -94,7 +94,7 @@ TaskQueue::Dequeue(std::unique_ptr<Task>& task)
 }
 
 bool
-TaskQueue::Dequeue(std::unique_ptr<Task>& task,
+TaskPool::Dequeue(std::unique_ptr<Task>& task,
                    const std::chrono::duration<uint32_t, std::milli>& timeout)
 {
   std::unique_lock<std::mutex> lk(completed_queue_mu_);

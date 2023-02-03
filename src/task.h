@@ -15,8 +15,7 @@ namespace common {
 //
 // Task
 //
-// Base class for all task objects that use a TaskQueue or
-// TaskTimeWheel.
+// Base class for all task objects.
 //
 class Task {
 public:
@@ -24,17 +23,18 @@ public:
 };
 
 //
-// TaskQueue
+// TaskPool
 //
 // A thread pool that executes enqueued tasks and then returns the
 // completed tasks on another queue. A task object must be wrapped in
-// a unique_ptr for enqueuing so that ownership is clearly passed to
-// the task queue. The task must derive from Task.
+// a std::unique_ptr for enqueuing/dequeuing so that ownership is
+// clearly passed to/from the task queue. The task must derive from
+// class Task.
 //
-class TaskQueue {
+class TaskPool {
 public:
-  TaskQueue(const size_t worker_cnt);
-  ~TaskQueue();
+  TaskPool(const size_t worker_cnt);
+  ~TaskPool();
 
   size_t InFlightTaskCount() const;
   void Enqueue(std::unique_ptr<Task> task);
