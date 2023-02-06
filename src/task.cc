@@ -138,6 +138,7 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
 TaskTimewheelPool::~TaskTimewheelPool()
 {
   ck_pr_store_32(&control_request_, CONTROL_EXIT);
+  drain_cv_.notify_all();
   pause_cv_.notify_all();
   for (auto& thd : work_threads_) {
     if (thd.joinable()) {
@@ -151,17 +152,16 @@ TaskTimewheelPool::Drain()
 {
   ck_pr_store_32(&control_request_, CONTROL_DRAIN);
   pause_cv_.notify_all();
-  for (auto& thd : work_threads_) {
-    if (thd.joinable()) {
-      thd.join();
-    }
-  }
+
+  std::unique_lock<std::mutex> lk(drain_mu_);
+  drain_cv_.wait(lk, [&]() -> bool { return ck_pr_load_32(&control_request_) != CONTROL_DRAIN; });
 }
 
 void
 TaskTimewheelPool::Pause()
 {
   ck_pr_store_32(&control_request_, CONTROL_PAUSE);
+  drain_cv_.notify_all();
 }
 
 void
@@ -169,6 +169,7 @@ TaskTimewheelPool::Run()
 {
   ck_pr_store_32(&control_request_, CONTROL_RUN);
   pause_cv_.notify_all();
+  drain_cv_.notify_all();
 }
 
 void
@@ -239,19 +240,22 @@ TaskTimewheelPool::WorkerThread(const bool is_controller)
       // signals an exit if necessary.
       if (is_controller) {
         uint32_t requested_control = ck_pr_load_32(&control_request_);
-        // Requested DRAIN becomes either EXIT or RUN depending on
-        // in-flight requests.
+        // Requested DRAIN becomes PAUSE once all in-flight tasks
+        // completed.
         if (requested_control == CONTROL_DRAIN) {
           if (ck_pr_load_32(&in_flight_task_count_) == 0) {
-            requested_control = CONTROL_EXIT;
+            requested_control = CONTROL_PAUSE;
+            ck_pr_store_32(&control_request_, CONTROL_PAUSE);
+            drain_cv_.notify_all();
           }
           else {
             requested_control = CONTROL_RUN;
           }
         }
+
         // Requested PAUSE causes the controlling thread to wait which
         // in turn causes all other threads to be blocked at barrier.
-        else if (requested_control == CONTROL_PAUSE) {
+        if (requested_control == CONTROL_PAUSE) {
           const std::chrono::milliseconds timeout(100);
           std::unique_lock<std::mutex> lk(pause_mu_);
           pause_cv_.wait_for(lk, timeout, [&]() -> bool { return ck_pr_load_32(&control_request_) != CONTROL_PAUSE; });

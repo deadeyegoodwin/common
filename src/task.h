@@ -195,13 +195,32 @@ private:
 //
 class TaskTimewheelPool {
 public:
+  // Construct the pool. The pool starts in the PAUSED state.
   TaskTimewheelPool(const size_t worker_count_, const size_t time_bucket_count);
   ~TaskTimewheelPool();
 
+  // Wait for all in-flight tasks to complete. Function returns when
+  // all in-flight tasks complete or when another thread calls Pause()
+  // or Run(). Calling Drain() does not prevent additional tasks from
+  // being enqueued, and thus becoming additional in-flight tasks that
+  // Drain() will wait on. After draining the pool will be
+  // PAUSED. Calling Drain() simultaneously from multiple threads or
+  // destroying the pool while a thread is active in Drain() has
+  // undefined behavior.
   void Drain();
+
+  // Pause pool so that it does not process any tasks once it
+  // completes the tasks in the current time-step. Pool will remain
+  // paused until Run() is called.
   void Pause();
+
+  // Unpause the pool so that is processes tasks.
   void Run();
 
+  // Enqueue a task at relative 'time_delta'. Tasks can be enqueued at
+  // the current time (time_delta == 0), but all pool threads may not
+  // be available to process those tasks. Preferred usage it so always
+  // enqueue tasks at a future time (time_delta > 0).
   void Enqueue(std::unique_ptr<Task> task, uint32_t time_delta);
 
 private:
@@ -213,8 +232,9 @@ private:
   static constexpr uint32_t CONTROL_DRAIN = 3;
   uint32_t control_request_ CK_CC_CACHELINE;
   uint64_t exit_generation_ CK_CC_CACHELINE;
-  std::mutex pause_mu_;
-  std::condition_variable pause_cv_;
+
+  std::mutex pause_mu_, drain_mu_;
+  std::condition_variable pause_cv_, drain_cv_;
 
   const size_t worker_count_;
   std::vector<std::thread> work_threads_;
