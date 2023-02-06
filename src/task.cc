@@ -210,22 +210,43 @@ TaskTimewheelPool::WorkerThread(const bool is_controller)
     // Current bucket...
     std::unique_ptr<Task> task;
     if (time_buckets_[bucket_idx].Dequeue(task)) {
-      Task* rtask = task.release();
-      if (!rtask->Invoke()) {
-        delete rtask;
+      // If there is a residue time-delta for the task, then
+      // re-enqueue the task in the appropriate future bucket.
+      size_t time_delta = task->payload_;
+      if (time_delta > 0) {
+        if (time_delta >= bucket_count_) {
+          time_delta = (bucket_count_ - 1);
+          task->payload_ -= time_delta;
+        }
+        else {
+          task->payload_ = 0;
+        }
+
+        const size_t idx = (bucket_idx + time_delta) % bucket_count_;
+        time_buckets_[idx].Enqueue(std::move(task));
       }
-      ck_pr_dec_32(&in_flight_task_count_);
+      else {
+        Task* rtask = task.release();
+        if (!rtask->Invoke()) {
+          delete rtask;
+        }
+        ck_pr_dec_32(&in_flight_task_count_);
+      }
     }
     // Input queue...
     else if (input_queue_.Dequeue(task)) {
       // 'payload_' is the time-delta for the task, use it to
-      // determine the appropriate bucket.
-      const size_t time_delta = task->payload_;
-
-      // FIXME, handle time_deltas that exceed buckets
+      // determine the appropriate bucket. If time-delta is farther in
+      // the future than the most-future bucket, then enqueue it in
+      // the most-future bucket with 'payload_' set to the remaining
+      // time-delta. When it is removed from the most-future bucket it
+      // will be reevaluated for the correct bucket.
+      size_t time_delta = task->payload_;
       if (time_delta >= bucket_count_) {
-        throw Exception("FIXME"); // FIXME
-      } else {
+        time_delta = (bucket_count_ - 1);
+        task->payload_ -= time_delta;
+      }
+      else {
         task->payload_ = 0;
       }
 

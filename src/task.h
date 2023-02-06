@@ -199,14 +199,14 @@ public:
   TaskTimewheelPool(const size_t worker_count_, const size_t time_bucket_count);
   ~TaskTimewheelPool();
 
-  // Wait for all in-flight tasks to complete. Function returns when
-  // all in-flight tasks complete or when another thread calls Pause()
-  // or Run(). Calling Drain() does not prevent additional tasks from
-  // being enqueued, and thus becoming additional in-flight tasks that
-  // Drain() will wait on. After draining the pool will be
-  // PAUSED. Calling Drain() simultaneously from multiple threads or
-  // destroying the pool while a thread is active in Drain() has
-  // undefined behavior.
+  // Put the pool in RUN mode and wait for all in-flight tasks to
+  // complete. Function returns when all in-flight tasks complete or
+  // when another thread calls Pause() or Run(). Calling Drain() does
+  // not prevent additional tasks from being enqueued, and thus
+  // becoming additional in-flight tasks that Drain() will wait
+  // on. After draining the pool will be PAUSED. Calling Drain()
+  // simultaneously from multiple threads or destroying the pool while
+  // a thread is active in Drain() has undefined behavior.
   void Drain();
 
   // Pause pool so that it does not process any tasks once it

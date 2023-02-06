@@ -3,7 +3,9 @@
 #include <exception>
 #include <chrono>
 #include <iostream>
+#include <mutex>
 #include <thread>
+#include <unordered_map>
 #include "random.h"
 #include "task.h"
 
@@ -16,14 +18,13 @@ namespace {
   } while (false)
 
 // Task that waits for a specified number of milliseconds and then
-// increments and atomic.
+// increments an atomic.
 class DelayTask : public common::Task {
 public:
   DelayTask(const std::string& name, const std::chrono::milliseconds& duration, std::atomic<size_t>& inc) :
     name_(name), duration_(duration), inc_(inc) { }
 
   bool Invoke() {
-//    std::cerr << "invoked " << name_ << " on " << std::this_thread::get_id() << std::endl;
     if (duration_.count() > 0) {
       std::this_thread::sleep_for(duration_);
     }
@@ -35,6 +36,25 @@ private:
   const std::string name_;
   const std::chrono::milliseconds duration_;
   std::atomic<size_t>& inc_;
+};
+
+// Task that safely pushes an identifier onto a shared vector.
+class PushTask : public common::Task {
+public:
+  PushTask(const std::string& name, std::vector<int32_t>& vec, const int32_t id) :
+    name_(name), vec_(vec), id_(id) { }
+
+  bool Invoke() {
+    static std::mutex mu;
+    std::lock_guard<std::mutex> lk(mu);
+    vec_.push_back(id_);
+    return false; // return ownership
+  }
+
+private:
+  const std::string name_;
+  std::vector<int32_t>& vec_;
+  const int32_t id_;
 };
 
 } // namespace
@@ -170,7 +190,60 @@ main(int argc, char **argv)
       }
     }
 
-    if (test_number > 5) {
+    // Short task length, random time-delta exceeding bucket count
+    if (test_number == 6) {
+      const size_t task_cnt = 1024 * 1024;
+      std::atomic<size_t> test_atomic { 0 };
+      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+
+      for (size_t i = 0; i < task_cnt; ++i) {
+        auto delay_task = std::make_unique<DelayTask>(
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
+        pool.Enqueue(std::move(delay_task), random(0, 3 * time_bucket_cnt));
+      }
+      pool.Drain();
+
+      if (test_atomic != task_cnt) {
+        Fail("test 6: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
+             std::to_string(task_cnt) + ")");
+      }
+    }
+
+    // Check that tasks invoked in time-delay order
+    if (test_number == 7) {
+      std::vector<int32_t> vec;
+      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      std::unordered_map<int32_t, uint32_t> delays {
+        { 0, 0 },
+        { 1, 1 },
+        { 2, 2 },
+        { 3, time_bucket_cnt - 1 },
+        { 4, time_bucket_cnt },
+        { 5, time_bucket_cnt + 1 },
+        { 6, (time_bucket_cnt * 2) - 1 },
+        { 7, (time_bucket_cnt * 2) },
+        { 8, (time_bucket_cnt * 2) + 1 }
+      };
+      for (const auto& pr : delays) {
+        auto task = std::make_unique<PushTask>(std::to_string(pr.first), vec, pr.first);
+        pool.Enqueue(std::move(task), pr.second);
+      }
+      pool.Drain();
+
+      if (vec.size() != delays.size()) {
+        Fail("test 7: vector size (" + std::to_string(vec.size()) + ") != delays (" +
+             std::to_string(delays.size()) + ")");
+      }
+
+      for (size_t i = 0; i < delays.size(); ++i) {
+        if (vec[i] != (int32_t)i) {
+          Fail("test 7: vector[" + std::to_string(i) + "]=" + std::to_string(vec[i]) +
+               ", expecting " + std::to_string(i));
+        }
+      }
+    }
+
+    if (test_number > 7) {
       Fail("unexpected test number " + std::to_string(test_number));
     }
   } catch (const std::exception& ex) {
