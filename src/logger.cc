@@ -30,15 +30,15 @@ IndentMultiline(const std::string& str, const size_t indent)
   return mstr;
 }
 
-Logger&
-operator<<(Logger& logger, std::ostream& (*os)(std::ostream&))
+StdoutLogger&
+operator<<(StdoutLogger& logger, std::ostream& (*os)(std::ostream&))
 {
   std::cout << os;
   return logger;
 }
 
-Logger&
-operator<<(const std::shared_ptr<Logger>& logger, std::ostream& (*os)(std::ostream&))
+StdoutLogger&
+operator<<(const std::shared_ptr<StdoutLogger>& logger, std::ostream& (*os)(std::ostream&))
 {
   std::cout << os;
   return *logger;

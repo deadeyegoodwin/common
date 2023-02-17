@@ -47,24 +47,6 @@ private:
   bool debug_ { false };
 };
 
-template <class T>
-Logger& operator<<(Logger& logger, const T& t)
-{
-  std::cout << t;
-  return logger;
-}
-
-template <class T>
-Logger& operator<<(const std::shared_ptr<Logger>& logger, const T& t)
-{
-  std::cout << t;
-  return *logger;
-}
-
-// Handle std::endl
-Logger& operator<<(Logger& logger, std::ostream& (*os)(std::ostream&));
-Logger& operator<<(const std::shared_ptr<Logger>& logger, std::ostream& (*os)(std::ostream&));
-
 //
 // StdoutLogger
 //
@@ -72,5 +54,23 @@ class StdoutLogger : public Logger {
 public:
   virtual void Log(const std::string& msg, size_t indent=0, bool endline=false) const;
 };
+
+template <class T>
+StdoutLogger& operator<<(StdoutLogger& logger, const T& t)
+{
+  std::cout << t;
+  return logger;
+}
+
+template <class T>
+StdoutLogger& operator<<(const std::shared_ptr<StdoutLogger>& logger, const T& t)
+{
+  std::cout << t;
+  return *logger;
+}
+
+// Handle std::endl
+StdoutLogger& operator<<(StdoutLogger& logger, std::ostream& (*os)(std::ostream&));
+StdoutLogger& operator<<(const std::shared_ptr<StdoutLogger>& logger, std::ostream& (*os)(std::ostream&));
 
 } // namespace common
