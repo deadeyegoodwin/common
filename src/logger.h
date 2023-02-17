@@ -52,7 +52,7 @@ private:
 //
 class StdoutLogger : public Logger {
 public:
-  virtual void Log(const std::string& msg, size_t indent=0, bool endline=false) const;
+  virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) const;
 };
 
 template <class T>
