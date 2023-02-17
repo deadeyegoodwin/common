@@ -34,7 +34,7 @@ TaskPool::TaskPool(const size_t worker_count)
       // Invoke the task. If TaskInvoke takes ownership of 'task' then
       // don't return it on the completed queue.
       Task* rtask = task.release();
-      if (!rtask->Invoke()) {
+      if (!rtask->Invoke(0)) {
         task.reset(rtask);
 
         std::lock_guard<std::mutex> lk(completed_queue_mu_);
@@ -227,7 +227,7 @@ TaskTimewheelPool::WorkerThread(const bool is_controller)
       }
       else {
         Task* rtask = task.release();
-        if (!rtask->Invoke()) {
+        if (!rtask->Invoke(generation_idx)) {
           delete rtask;
         }
         ck_pr_dec_32(&in_flight_task_count_);

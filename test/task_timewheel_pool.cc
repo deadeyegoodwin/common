@@ -24,7 +24,7 @@ public:
   DelayTask(const std::string& name, const std::chrono::milliseconds& duration, std::atomic<size_t>& inc) :
     name_(name), duration_(duration), inc_(inc) { }
 
-  bool Invoke() {
+  bool Invoke(uint64_t time_step) {
     if (duration_.count() > 0) {
       std::this_thread::sleep_for(duration_);
     }
@@ -44,7 +44,7 @@ public:
   PushTask(const std::string& name, std::vector<int32_t>& vec, const int32_t id) :
     name_(name), vec_(vec), id_(id) { }
 
-  bool Invoke() {
+  bool Invoke(uint64_t time_step) {
     static std::mutex mu;
     std::lock_guard<std::mutex> lk(mu);
     vec_.push_back(id_);

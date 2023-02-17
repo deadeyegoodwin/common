@@ -29,11 +29,13 @@ public:
   virtual ~Task() = default;
 
   // Invoke task and transfer ownership of the task to the Invoke()
-  // function. Invoke() should return true to indicate that it is
-  // retaining ownership of the task object, and return false to
-  // indicate that it is returning ownership of the task object to the
-  // caller.
-  virtual bool Invoke() = 0;
+  // function. 'time_step' passes the time-step for the task
+  // invocation, if that is meaningful. Invoke() should return true to
+  // indicate that it is retaining ownership of the task object, and
+  // return false to indicate that it is returning ownership of the
+  // task object to the caller. See TaskPool, TaskTimewheelPool,
+  // etc. for specific handling of this function.
+  virtual bool Invoke(uint64_t time_step) = 0;
 
 private:
   friend class TaskTimewheelPool;
@@ -52,7 +54,8 @@ private:
 // so that ownership is clearly passed to/from the pool. The task must
 // derive from class Task.
 //
-// If Task::Invoke() returns false, indicating that TaskPool retains
+// Task::Invoke() is always called with time_step = 0. If
+// Task::Invoke() returns false, indicating that TaskPool retains
 // ownership of the task object, TaskPool returns that task on the
 // completed queue. This is the normal behavior. If Task::Invoke()
 // returns true, then TaskPool no longer has ownership of the task
@@ -186,7 +189,8 @@ private:
 // that ownership is clearly passed to the pool. The task must derive
 // from class Task.
 //
-// If TaskInvoke() returns true, indicating that the task has taken
+// Task::Invoke() is called with time_step = time N. If If
+// TaskInvoke() returns true, indicating that the task has taken
 // ownership of its own Task object, then TaskTimewheelPool does not
 // perform any futher action on that task. If TaskInvoke() returns
 // false then TaskTimewheelPool retains ownership of the task,
