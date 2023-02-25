@@ -1,6 +1,9 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 
+#include <cerrno>
+#include <cstring>
 #include <mutex>
+#include "error.h"
 #include "logger.h"
 
 namespace common {
@@ -30,35 +33,48 @@ IndentMultiline(const std::string& str, const size_t indent)
   return mstr;
 }
 
-StdoutLogger&
-operator<<(StdoutLogger& logger, std::ostream& (*os)(std::ostream&))
+StreamLogger::StreamLogger(std::ostream& of) :
+  out_stream_(of)
 {
-  std::cout << os;
+}
+
+StreamLogger::StreamLogger(const std::string& filename) :
+  ofs_(filename), out_stream_(ofs_)
+{
+  if (ofs_.fail()) {
+    throw Exception("unable to open '" + filename + "': " +  std::strerror(errno));
+  }
+}
+
+StreamLogger&
+operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&))
+{
+  logger.out_stream_ << os;
   return logger;
 }
 
-StdoutLogger&
-operator<<(const std::shared_ptr<StdoutLogger>& logger, std::ostream& (*os)(std::ostream&))
+StreamLogger&
+operator<<(const std::shared_ptr<StreamLogger>& logger, std::ostream& (*os)(std::ostream&))
 {
-  std::cout << os;
+  logger->out_stream_ << os;
   return *logger;
 }
 
 void
-StdoutLogger::Log(const std::string& msg, size_t indent, bool endline) const
+StreamLogger::Log(const std::string& msg, size_t indent, bool endline)
 {
   static std::mutex mu;
   std::lock_guard<std::mutex> lk(mu);
 
   if (indent == 0) {
-    std::cout << msg;
+    out_stream_ << msg;
   }
   else {
-    std::cout << IndentMultiline(msg, indent);
+    out_stream_ << IndentMultiline(msg, indent);
   }
 
   if (endline) {
-    std::cout << std::endl;
+    out_stream_ << std::endl;
   }
 }
 

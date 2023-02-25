@@ -1,6 +1,7 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 #pragma once
 
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -29,15 +30,15 @@ public:
   void EnableVerbose() { quiet_ = false; verbose_ = true; debug_ = false; }
   void EnableDebug() { quiet_ = false; verbose_ = true; debug_ = true; }
 
-  virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) const = 0;
+  virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) = 0;
 
-  void LogInfo(const std::string& msg, size_t indent=0, bool endline=true) const {
+  void LogInfo(const std::string& msg, size_t indent=0, bool endline=true) {
     if (IsInfoEnabled()) { Log(msg, indent, endline); }
   }
-  void LogVerbose(const std::string& msg, size_t indent=0, bool endline=true) const {
+  void LogVerbose(const std::string& msg, size_t indent=0, bool endline=true) {
     if (IsVerboseEnabled()) { Log(msg, indent, endline); }
   }
-  void LogDebug(const std::string& msg, size_t indent=0, bool endline=true) const {
+  void LogDebug(const std::string& msg, size_t indent=0, bool endline=true) {
     if (IsDebugEnabled()) { Log(msg, indent, endline); }
   }
 
@@ -48,29 +49,46 @@ private:
 };
 
 //
-// StdoutLogger
+// StreamLogger
 //
-class StdoutLogger : public Logger {
+// Logs to std::cout, std::cerr or to a file.
+//
+class StreamLogger : public Logger {
 public:
-  virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) const;
+  // Logger holds a reference to 'of' so the caller is required to
+  // ensure that the lifetime of 'of' extends over the lifetime of
+  // 'this' logger.
+  StreamLogger(std::ostream& of);
+
+  // Open named file and stream logging to that file.
+  StreamLogger(const std::string& filename);
+
+  virtual void Log(const std::string& msg, size_t indent=0, bool endline=true);
+
+private:
+  friend StreamLogger& operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&));
+  friend StreamLogger& operator<<(const std::shared_ptr<StreamLogger>& logger,
+                                  std::ostream& (*os)(std::ostream&));
+  std::ofstream ofs_;
+  std::ostream& out_stream_;
 };
 
 template <class T>
-StdoutLogger& operator<<(StdoutLogger& logger, const T& t)
+StreamLogger& operator<<(StreamLogger& logger, const T& t)
 {
-  std::cout << t;
+  logger.out_stream_ << t;
   return logger;
 }
 
 template <class T>
-StdoutLogger& operator<<(const std::shared_ptr<StdoutLogger>& logger, const T& t)
+StreamLogger& operator<<(const std::shared_ptr<StreamLogger>& logger, const T& t)
 {
-  std::cout << t;
+  logger->out_stream_ << t;
   return *logger;
 }
 
 // Handle std::endl
-StdoutLogger& operator<<(StdoutLogger& logger, std::ostream& (*os)(std::ostream&));
-StdoutLogger& operator<<(const std::shared_ptr<StdoutLogger>& logger, std::ostream& (*os)(std::ostream&));
+StreamLogger& operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&));
+StreamLogger& operator<<(const std::shared_ptr<StreamLogger>& logger, std::ostream& (*os)(std::ostream&));
 
 } // namespace common
