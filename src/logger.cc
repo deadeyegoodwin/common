@@ -33,13 +33,13 @@ IndentMultiline(const std::string& str, const size_t indent)
   return mstr;
 }
 
-StreamLogger::StreamLogger(std::ostream& of) :
-  out_stream_(of)
+StreamLogger::StreamLogger(Logger::Level level, std::ostream& of) :
+  Logger(level), out_stream_(of)
 {
 }
 
-StreamLogger::StreamLogger(const std::string& filename) :
-  ofs_(filename), out_stream_(ofs_)
+StreamLogger::StreamLogger(Logger::Level level, const std::string& filename) :
+  Logger(level), ofs_(filename), out_stream_(ofs_)
 {
   if (ofs_.fail()) {
     throw Exception("unable to open '" + filename + "': " +  std::strerror(errno));
