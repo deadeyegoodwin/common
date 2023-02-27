@@ -106,12 +106,12 @@ public:
   StreamLogger(Logger::Level filter_level, std::ostream& of);
 
   // Open named file and stream logging to that file.
-  StreamLogger(Logger::Level filter_level, const std::string& filename);
+  StreamLogger(Logger::Level filter_level, const std::string& filename, bool buffered = true);
 
   // Copy settings from existing logger, but override any existing
   // logging destination to instead log to provided ostream or file.
   StreamLogger(const Logger& other, std::ostream& of);
-  StreamLogger(const Logger& other, const std::string& filename);
+  StreamLogger(const Logger& other, const std::string& filename, bool buffered = true);
 
   virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) override;
 
