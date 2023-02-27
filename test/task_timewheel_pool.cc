@@ -24,7 +24,7 @@ public:
   DelayTask(const std::string& name, const std::chrono::milliseconds& duration, std::atomic<size_t>& inc) :
     name_(name), duration_(duration), inc_(inc) { }
 
-  bool Invoke(uint64_t time_step) {
+  bool Invoke(uint64_t time_step) override {
     if (duration_.count() > 0) {
       std::this_thread::sleep_for(duration_);
     }

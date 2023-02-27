@@ -25,18 +25,19 @@ public:
     HIGH = 3  // Show LOW, MED and HIGH volume logging
   };
 
-  Logger() : level_(Level::LOW) { }
-  Logger(const Level level) : level_(level) { }
+  Logger() : filter_level_(Level::LOW) { }
+  Logger(const Level filter_level) : filter_level_(filter_level) { }
+  Logger(const Logger& other) = default;
   virtual ~Logger() = default;
 
   // Get or set the volume filter. A log request will be surpressed if
   // it is at a level higher than FilterLevel().
-  Level FilterLevel() const { return level_; }
-  void SetFilterLevel(const Level level) { level_ = level; }
+  Level FilterLevel() const { return filter_level_; }
+  void SetFilterLevel(const Level filter_level) { filter_level_ = filter_level; }
 
-  // Log a message if 'level' is no greater than FilterLevel().
-  void Log(Level level, const std::string& msg, size_t indent=0, bool endline=true) {
-    if ((level != Level::OFF) && (level <= level_)) {
+  // Log a message if 'fitler_level' is no greater than FilterLevel().
+  void Log(Level filter_level, const std::string& msg, size_t indent=0, bool endline=true) {
+    if ((filter_level != Level::OFF) && (filter_level <= filter_level_)) {
       Log(msg, indent, endline);
     }
   }
@@ -59,7 +60,7 @@ public:
   virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) = 0;
 
 protected:
-  Level level_;
+  Level filter_level_;
 };
 
 //
@@ -102,12 +103,17 @@ public:
   // Logger holds a reference to 'of' so the caller is required to
   // ensure that the lifetime of 'of' extends over the lifetime of
   // 'this' logger.
-  StreamLogger(Logger::Level level, std::ostream& of);
+  StreamLogger(Logger::Level filter_level, std::ostream& of);
 
   // Open named file and stream logging to that file.
-  StreamLogger(Logger::Level level, const std::string& filename);
+  StreamLogger(Logger::Level filter_level, const std::string& filename);
 
-  virtual void Log(const std::string& msg, size_t indent=0, bool endline=true);
+  // Copy settings from existing logger, but override any existing
+  // logging destination to instead log to provided ostream or file.
+  StreamLogger(const Logger& other, std::ostream& of);
+  StreamLogger(const Logger& other, const std::string& filename);
+
+  virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) override;
 
 private:
   friend StreamLogger& operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&));
