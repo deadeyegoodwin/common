@@ -240,6 +240,7 @@ private:
   static constexpr uint32_t CONTROL_PAUSE = 2;
   static constexpr uint32_t CONTROL_DRAIN = 3;
   uint32_t control_request_ CK_CC_CACHELINE;
+  uint64_t pause_generation_ CK_CC_CACHELINE;
   uint64_t exit_generation_ CK_CC_CACHELINE;
 
   std::mutex pause_mu_, drain_mu_;

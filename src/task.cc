@@ -118,8 +118,8 @@ TaskPool::Dequeue(std::unique_ptr<Task>& task,
 }
 
 TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t bucket_count) :
-  control_request_(CONTROL_PAUSE), exit_generation_(0), worker_count_(worker_count),
-  bucket_count_(bucket_count), time_buckets_(bucket_count),
+  control_request_(CONTROL_PAUSE), pause_generation_(0), exit_generation_(0),
+  worker_count_(worker_count), bucket_count_(bucket_count), time_buckets_(bucket_count),
   next_barrier_(CK_BARRIER_CENTRALIZED_INITIALIZER), in_flight_task_count_(0)
 {
   if (worker_count_ == 0) {
@@ -144,8 +144,9 @@ void
 TaskTimewheelPool::Stop()
 {
   ck_pr_store_32(&control_request_, CONTROL_EXIT);
-  drain_cv_.notify_all();
+  ck_pr_store_64(&pause_generation_, 0);
   pause_cv_.notify_all();
+  drain_cv_.notify_all();
   for (auto& thd : work_threads_) {
     if (thd.joinable()) {
       thd.join();
@@ -157,6 +158,7 @@ void
 TaskTimewheelPool::Drain()
 {
   ck_pr_store_32(&control_request_, CONTROL_DRAIN);
+  ck_pr_store_64(&pause_generation_, 0);
   pause_cv_.notify_all();
 
   std::unique_lock<std::mutex> lk(drain_mu_);
@@ -175,6 +177,7 @@ void
 TaskTimewheelPool::Run()
 {
   ck_pr_store_32(&control_request_, CONTROL_RUN);
+  ck_pr_store_64(&pause_generation_, 0);
   pause_cv_.notify_all();
   drain_cv_.notify_all();
 }
@@ -191,16 +194,16 @@ void
 TaskTimewheelPool::WorkerThread(const bool is_controller)
 {
   // Increments for every time bucket. Must start at 1 (instead of 0)
-  // as it is used with exit_generation_ to mark the generation where
-  // threads should exit.
+  // as it is used with pause_generation_ and exit_generation_ to mark
+  // the generation where threads should pause/exit.
   uint64_t generation_idx = 1;
 
   ck_barrier_centralized_state_t next_barrier_state = CK_BARRIER_CENTRALIZED_STATE_INITIALIZER;
   size_t bucket_idx = 0;
 
   // If starting in PAUSED, then pause here...
-  if (is_controller && (ck_pr_load_32(&control_request_) == CONTROL_PAUSE)) {
-    const std::chrono::milliseconds timeout(100);
+  if (ck_pr_load_32(&control_request_) == CONTROL_PAUSE) {
+    const std::chrono::milliseconds timeout(500);
     std::unique_lock<std::mutex> lk(pause_mu_);
     pause_cv_.wait_for(lk, timeout, [&]() -> bool {
       return ck_pr_load_32(&control_request_) != CONTROL_PAUSE; });
@@ -282,16 +285,9 @@ TaskTimewheelPool::WorkerThread(const bool is_controller)
           }
         }
 
-        // Requested PAUSE causes the controlling thread to wait which
-        // in turn causes all other threads to be blocked at barrier.
         if (requested_control == CONTROL_PAUSE) {
-          const std::chrono::milliseconds timeout(100);
-          std::unique_lock<std::mutex> lk(pause_mu_);
-          pause_cv_.wait_for(lk, timeout, [&]() -> bool {
-            return ck_pr_load_32(&control_request_) != CONTROL_PAUSE; });
-          requested_control = CONTROL_RUN;
+          ck_pr_store_64(&pause_generation_, generation_idx);
         }
-
         if (requested_control == CONTROL_EXIT) {
           ck_pr_store_64(&exit_generation_, generation_idx);
         }
@@ -299,8 +295,17 @@ TaskTimewheelPool::WorkerThread(const bool is_controller)
 
       ck_barrier_centralized(&next_barrier_, &next_barrier_state, worker_count_);
 
+      // Exit all threads if requested...
       if (ck_pr_load_64(&exit_generation_) == generation_idx) {
         break;
+      }
+
+      // Pause all threads if requested...
+      if (ck_pr_load_64(&pause_generation_) == generation_idx) {
+        const std::chrono::milliseconds timeout(500);
+        std::unique_lock<std::mutex> lk(pause_mu_);
+        pause_cv_.wait_for(lk, timeout, [&]() -> bool {
+          return ck_pr_load_64(&pause_generation_) != generation_idx; });
       }
 
       generation_idx++;
