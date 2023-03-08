@@ -203,6 +203,11 @@ public:
   TaskTimewheelPool(const size_t worker_count_, const size_t time_bucket_count);
   ~TaskTimewheelPool();
 
+  // Stop the pool. Any pending tasks will not be invoked. Once
+  // stopped the pool cannot be restarted. Function returns when all
+  // pool threads have exited.
+  void Stop();
+
   // Put the pool in RUN mode and wait for all in-flight tasks to
   // complete. Function returns when all in-flight tasks complete or
   // when another thread calls Pause() or Run(). Calling Drain() does

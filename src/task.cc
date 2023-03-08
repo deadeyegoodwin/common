@@ -137,6 +137,12 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
 
 TaskTimewheelPool::~TaskTimewheelPool()
 {
+  Stop();
+}
+
+void
+TaskTimewheelPool::Stop()
+{
   ck_pr_store_32(&control_request_, CONTROL_EXIT);
   drain_cv_.notify_all();
   pause_cv_.notify_all();
@@ -154,7 +160,8 @@ TaskTimewheelPool::Drain()
   pause_cv_.notify_all();
 
   std::unique_lock<std::mutex> lk(drain_mu_);
-  drain_cv_.wait(lk, [&]() -> bool { return ck_pr_load_32(&control_request_) != CONTROL_DRAIN; });
+  drain_cv_.wait(lk, [&]() -> bool {
+    return ck_pr_load_32(&control_request_) != CONTROL_DRAIN; });
 }
 
 void
@@ -195,7 +202,8 @@ TaskTimewheelPool::WorkerThread(const bool is_controller)
   if (is_controller && (ck_pr_load_32(&control_request_) == CONTROL_PAUSE)) {
     const std::chrono::milliseconds timeout(100);
     std::unique_lock<std::mutex> lk(pause_mu_);
-    pause_cv_.wait_for(lk, timeout, [&]() -> bool { return ck_pr_load_32(&control_request_) != CONTROL_PAUSE; });
+    pause_cv_.wait_for(lk, timeout, [&]() -> bool {
+      return ck_pr_load_32(&control_request_) != CONTROL_PAUSE; });
   }
 
   ck_barrier_centralized(&next_barrier_, &next_barrier_state, worker_count_);
@@ -279,7 +287,8 @@ TaskTimewheelPool::WorkerThread(const bool is_controller)
         if (requested_control == CONTROL_PAUSE) {
           const std::chrono::milliseconds timeout(100);
           std::unique_lock<std::mutex> lk(pause_mu_);
-          pause_cv_.wait_for(lk, timeout, [&]() -> bool { return ck_pr_load_32(&control_request_) != CONTROL_PAUSE; });
+          pause_cv_.wait_for(lk, timeout, [&]() -> bool {
+            return ck_pr_load_32(&control_request_) != CONTROL_PAUSE; });
           requested_control = CONTROL_RUN;
         }
 
