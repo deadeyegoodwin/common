@@ -6,7 +6,11 @@ project(common LANGUAGES CXX)
 
 include(CMakeDependentOption)
 include(ExternalProject)
+
 find_package(nlohmann_json 3.2.0 REQUIRED)
+
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -76,6 +80,7 @@ set_target_properties(
 target_link_libraries(
   common-library
   PUBLIC
+    Threads::Threads
     nlohmann_json::nlohmann_json
     ck-library
 )

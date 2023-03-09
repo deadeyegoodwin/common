@@ -4,6 +4,9 @@ cmake_minimum_required(VERSION 3.18)
 
 include(CTest)
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+
 #
 # TaskTimewheelPool
 #
@@ -30,6 +33,7 @@ set_target_properties(
 target_link_libraries(
   task-timewheel-pool
   PRIVATE
+    Threads::Threads
     common-library
 )
 
