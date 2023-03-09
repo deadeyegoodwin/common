@@ -183,19 +183,19 @@ private:
 // when the task should execute. TaskTimewheelPool does not itself
 // assign any actual time duration to a time delta value, it simply
 // makes sure that all tasks enqueued for execution at time N are
-// invoked (and TaskInvoke returns) before tasks at time N+1.
+// invoked (and Task::Invoke returns) before tasks at time N+1.
 //
 // A task object must be wrapped in a std::unique_ptr for enqueuing so
 // that ownership is clearly passed to the pool. The task must derive
 // from class Task.
 //
-// Task::Invoke() is called with time_step = time N. If If
-// TaskInvoke() returns true, indicating that the task has taken
-// ownership of its own Task object, then TaskTimewheelPool does not
-// perform any futher action on that task. If TaskInvoke() returns
-// false then TaskTimewheelPool retains ownership of the task,
-// however, because TaskTimewheelPool has no futher use for the task,
-// it will simply delete it.
+// Task::Invoke() is called with time_step = time N. If Task::Invoke()
+// returns true, indicating that the task has taken ownership of its
+// own Task object, then TaskTimewheelPool does not perform any futher
+// action on that task. If Task::Invoke() returns false then
+// TaskTimewheelPool retains ownership of the task, however, because
+// TaskTimewheelPool has no futher use for the task, it will simply
+// delete it.
 //
 class TaskTimewheelPool {
 public:
@@ -203,28 +203,37 @@ public:
   TaskTimewheelPool(const size_t worker_count_, const size_t time_bucket_count);
   ~TaskTimewheelPool();
 
-  // Stop the pool. Any pending tasks will not be invoked. Once
-  // stopped the pool cannot be restarted. Function returns when all
-  // pool threads have exited.
-  void Stop();
+  // Stop the pool so that any pending or future tasks will not be
+  // invoked. Once stopped the pool cannot be restarted. Function
+  // returns when pool is stopped. Returns false if pool is in a state
+  // that does not allowing stopping. Calling this function from
+  // Task::Invoke is unsupported and causes undefined behavior.
+  bool Stop();
 
-  // Put the pool in RUN mode and wait for all in-flight tasks to
-  // complete. Function returns when all in-flight tasks complete or
-  // when another thread calls Pause() or Run(). Calling Drain() does
-  // not prevent additional tasks from being enqueued, and thus
-  // becoming additional in-flight tasks that Drain() will wait
-  // on. After draining the pool will be PAUSED. Calling Drain()
-  // simultaneously from multiple threads or destroying the pool while
-  // a thread is active in Drain() has undefined behavior.
-  void Drain();
+  // Drain all in-flight tasks from the pool. Function returns when
+  // all in-flight tasks complete or when another thread calls
+  // Pause(), Run() or Stop(). Calling Drain() does not prevent
+  // additional tasks from being enqueued, and thus becoming
+  // additional in-flight tasks that Drain() will wait on. Returns
+  // false if pool is in a state that does not allowing draining.
+  // Calling this function from Task::Invoke is unsupported and causes
+  // undefined behavior.
+  bool Drain();
 
   // Pause pool so that it does not process any tasks once it
-  // completes the tasks in the current time-step. Pool will remain
-  // paused until Run() is called.
-  void Pause();
+  // completes the tasks in the current time-step. Function returns
+  // when pool is paused or when another thread calls Run() or
+  // Stop(). Calling Pause() does not prevent additional tasks from
+  // being enqueued. Returns false if pool is in a state that does not
+  // allowing pausing. Calling this function from Task::Invoke is
+  // unsupported and causes undefined behavior.
+  bool Pause();
 
-  // Unpause the pool so that is processes tasks.
-  void Run();
+  // Run/unpause the pool. Function returns when pool has commenced
+  // processing tasks. Returns false if pool is in a state that does
+  // not allowing pausing. Calling this function from Task::Invoke is
+  // unsupported and causes undefined behavior.
+  bool Run();
 
   // Enqueue a task at relative 'time_delta'. Tasks can be enqueued at
   // the current time (time_delta == 0), but all pool threads may not
@@ -233,21 +242,21 @@ public:
   void Enqueue(std::unique_ptr<Task> task, uint32_t time_delta);
 
 private:
+  friend class TimewheelControlTask;
+
+  enum class ControlState { RUNNING, DRAINING, PAUSING, PAUSED, STOPPING, STOPPED };
+  static const std::string& ControlStateToName(const ControlState state);
+
   void WorkerThread(const bool is_controller);
 
-  static constexpr uint32_t CONTROL_RUN = 0;
-  static constexpr uint32_t CONTROL_EXIT = 1;
-  static constexpr uint32_t CONTROL_PAUSE = 2;
-  static constexpr uint32_t CONTROL_DRAIN = 3;
-  uint32_t control_request_ CK_CC_CACHELINE;
-  uint64_t pause_generation_ CK_CC_CACHELINE;
-  uint64_t exit_generation_ CK_CC_CACHELINE;
-
-  std::mutex pause_mu_, drain_mu_;
-  std::condition_variable pause_cv_, drain_cv_;
+  std::mutex control_mu_;
+  std::condition_variable control_cv_;
+  ControlState control_state_;
 
   const size_t worker_count_;
   std::vector<std::thread> work_threads_;
+  size_t worker_pause_cnt_;
+  size_t worker_stop_cnt_;
 
   const size_t bucket_count_;
   std::vector<TaskLocklessMultiQueue> time_buckets_;

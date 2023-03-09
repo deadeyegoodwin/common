@@ -243,7 +243,44 @@ main(int argc, char **argv)
       }
     }
 
-    if (test_number > 7) {
+    // Multiple drains and pauses.
+    if (test_number == 8) {
+      const size_t task_cnt = 1024 * 1024;
+      std::atomic<size_t> test_atomic { 0 };
+      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+
+      pool.Drain();
+      pool.Pause();
+
+      for (size_t i = 0; i < task_cnt; ++i) {
+        auto delay_task = std::make_unique<DelayTask>(
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
+        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1));
+      }
+      pool.Pause();
+      pool.Drain();
+      pool.Pause();
+      pool.Drain();
+      pool.Stop();
+
+      if (test_atomic != task_cnt) {
+        Fail("test 8: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
+             std::to_string(task_cnt) + ")");
+      }
+    }
+
+    // Control failure expected after stop.
+    if (test_number == 9) {
+      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+
+      if (!pool.Stop()) { Fail("test 9: Stop() failed"); }
+      if (pool.Pause()) { Fail("test 9: Pause() unexpected pass"); }
+      if (pool.Drain()) { Fail("test 9: Drain() unexpected pass"); }
+      if (pool.Run()) { Fail("test 9: Run() unexpected pass"); }
+      if (!pool.Stop()) { Fail("test 9: Stop() failed"); }
+    }
+
+    if (test_number > 9) {
       Fail("unexpected test number " + std::to_string(test_number));
     }
   } catch (const std::exception& ex) {
