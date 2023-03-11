@@ -247,7 +247,7 @@ private:
   enum class ControlState { RUNNING, DRAINING, PAUSING, PAUSED, STOPPING, STOPPED };
   static const std::string& ControlStateToName(const ControlState state);
 
-  void WorkerThread(const bool is_controller);
+  void WorkerThread();
 
   std::mutex control_mu_;
   std::condition_variable control_cv_;

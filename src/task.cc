@@ -226,14 +226,19 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
     throw Exception("TaskTimewheelPool requires at least 1 time bucket");
   }
 
-  // Pause the pool at the start...
+  // Pause the pool at the start... Directly enqueue a PAUSE task for
+  // each worker so that the first task executed by each worker is a
+  // PAUSE.
   control_state_ = ControlState::PAUSING;
-  Enqueue(std::make_unique<TimewheelControlTask>(
-            TimewheelControlTask::Kind::PAUSE_MASTER, *this), 0);
+  worker_pause_cnt_ = worker_count_;
+  for (size_t w = 0; w < worker_count_; ++w) {
+    Enqueue(std::make_unique<TimewheelControlTask>(
+              TimewheelControlTask::Kind::PAUSE, *this), 0 /* time_delta */);
+  }
 
   work_threads_.reserve(worker_count_);
   for (size_t i = 0; i < worker_count_; ++i) {
-    work_threads_.emplace_back([this, i]() { WorkerThread(i == 0); });
+    work_threads_.emplace_back([this, i]() { WorkerThread(); });
   }
 }
 
@@ -435,12 +440,10 @@ TaskTimewheelPool::Enqueue(std::unique_ptr<Task> task, uint32_t time_delta)
 }
 
 void
-TaskTimewheelPool::WorkerThread(const bool is_controller)
+TaskTimewheelPool::WorkerThread()
 {
-  // Increments for every time bucket. Must start at 1 (instead of 0)
-  // as it is used with pause_generation_ and exit_generation_ to mark
-  // the generation where threads should pause/exit.
-  uint64_t generation_idx = 1;
+  // Increments for every time-step.
+  uint64_t generation_idx = 0;
 
   ck_barrier_centralized_state_t next_barrier_state = CK_BARRIER_CENTRALIZED_STATE_INITIALIZER;
   size_t bucket_idx = 0;
