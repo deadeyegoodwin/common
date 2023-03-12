@@ -68,39 +68,39 @@ endforeach()
 # TaskTimewheelPool
 #
 add_executable(
-  task-timewheel-pool
-  task_timewheel_pool.cc
+  task-timewheel-pool-test
+  task_timewheel_pool_test.cc
 )
-add_dependencies(common-test task-timewheel-pool)
+add_dependencies(common-test task-timewheel-pool-test)
 
-target_compile_features(task-timewheel-pool PRIVATE cxx_std_17)
+target_compile_features(task-timewheel-pool-test PRIVATE cxx_std_17)
 target_compile_options(
-  task-timewheel-pool
+  task-timewheel-pool-test
   PRIVATE
     -Wall -Wextra -Werror -Wno-unused-parameter
 )
 
 set_target_properties(
-  task-timewheel-pool
+  task-timewheel-pool-test
   PROPERTIES
     POSITION_INDEPENDENT_CODE ON
-    OUTPUT_NAME task_timewheel_pool
+    OUTPUT_NAME task_timewheel_pool_test
 )
 
 target_link_libraries(
-  task-timewheel-pool
+  task-timewheel-pool-test
   PRIVATE
     Threads::Threads
     common-library
 )
 
-add_test(NAME task-timewheel-pool0 COMMAND task_timewheel_pool 0)
-add_test(NAME task-timewheel-pool1 COMMAND task_timewheel_pool 1)
-add_test(NAME task-timewheel-pool2 COMMAND task_timewheel_pool 2)
-add_test(NAME task-timewheel-pool3 COMMAND task_timewheel_pool 3)
-add_test(NAME task-timewheel-pool4 COMMAND task_timewheel_pool 4)
-add_test(NAME task-timewheel-pool5 COMMAND task_timewheel_pool 5)
-add_test(NAME task-timewheel-pool6 COMMAND task_timewheel_pool 6)
-add_test(NAME task-timewheel-pool7 COMMAND task_timewheel_pool 7)
-add_test(NAME task-timewheel-pool8 COMMAND task_timewheel_pool 8)
-add_test(NAME task-timewheel-pool9 COMMAND task_timewheel_pool 9)
+add_test(NAME task-timewheel-pool-test0 COMMAND task_timewheel_pool_test 0)
+add_test(NAME task-timewheel-pool-test1 COMMAND task_timewheel_pool_test 1)
+add_test(NAME task-timewheel-pool-test2 COMMAND task_timewheel_pool_test 2)
+add_test(NAME task-timewheel-pool-test3 COMMAND task_timewheel_pool_test 3)
+add_test(NAME task-timewheel-pool-test4 COMMAND task_timewheel_pool_test 4)
+add_test(NAME task-timewheel-pool-test5 COMMAND task_timewheel_pool_test 5)
+add_test(NAME task-timewheel-pool-test6 COMMAND task_timewheel_pool_test 6)
+add_test(NAME task-timewheel-pool-test7 COMMAND task_timewheel_pool_test 7)
+add_test(NAME task-timewheel-pool-test8 COMMAND task_timewheel_pool_test 8)
+add_test(NAME task-timewheel-pool-test9 COMMAND task_timewheel_pool_test 9)

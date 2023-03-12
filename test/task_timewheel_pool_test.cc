@@ -59,7 +59,7 @@ private:
 
 } // namespace
 
-// task_timewheel_pool <test number> <random seed>
+// task_timewheel_pool_test <test number> <random seed>
 int
 main(int argc, char **argv)
 {
@@ -73,7 +73,7 @@ main(int argc, char **argv)
   std::cout << std::endl;
 
   if (argc < 2) {
-    std::cerr << "usage: task_timewheel_pool <test number> [random-seed]" << std::endl;
+    std::cerr << "usage: task_timewheel_pool_test <test number> [random-seed]" << std::endl;
     exit(1);
   }
 
