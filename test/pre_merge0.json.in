@@ -1,0 +1,29 @@
+{
+  "preprocessor-templates" : {
+    "t0" : {
+      "t0_a" : 1,
+      "t0_b" : 2
+    },
+    "t1" : {
+      "t1_a" : "x",
+      "t1_b" : {
+        "t1_b_a" : "existing nested",
+        "t1_b_b" : "existing nested"
+      }
+    }
+  },
+  "body" : {
+    "b1" : {
+      "tb_a" : 123
+    },
+    "b2" : {
+      "preprocessor-template" : "t1",
+      "merge" : {
+        "t1_b" : {
+          "t1_b_a" : "nested"
+        }
+      },
+      "other-stuff-that-will-be-lost" : "stuff"
+    }
+  }
+}

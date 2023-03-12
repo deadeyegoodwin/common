@@ -1,0 +1,27 @@
+{
+  "preprocessor-templates" : {
+    "t0" : {
+      "t0_a" : 1,
+      "t0_b" : 2,
+      "t0_t" : {
+        "preprocessor-template" : "t1"
+      }
+    },
+    "t1" : {
+      "t1_a" : "x",
+      "t1_b" : "y",
+      "t1_t" : {
+        "preprocessor-template" : "t0"
+      }
+    }
+  },
+  "body" : {
+    "b1" : {
+      "tb_a" : 123
+    },
+    "b2" : {
+      "preprocessor-template" : "t1",
+      "other-stuff-that-will-be-lost" : "stuff"
+    }
+  }
+}

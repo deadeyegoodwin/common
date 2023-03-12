@@ -1,0 +1,6 @@
+{
+  "preprocessor-templates" : {
+    "moo" : "cow"
+  },
+  "not-body" : 0
+}

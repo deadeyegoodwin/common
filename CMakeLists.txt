@@ -51,6 +51,7 @@ target_include_directories(
 #
 add_library(
   common-library STATIC
+  src/json_preprocessor.cc
   src/logger.cc
   src/random.cc
   src/settings.cc

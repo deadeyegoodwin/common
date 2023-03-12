@@ -1,0 +1,13 @@
+{
+  "preprocessor-templates" : {
+    "t0" : {
+      "t0_a" : 1,
+      "t0_b" : 2
+    },
+    "t1" : {
+      "t1_a" : "x",
+      "t1_b" : "y"
+    }
+  },
+  "body" : false
+}

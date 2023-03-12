@@ -1,0 +1,41 @@
+{
+  "preprocessor-templates" : {
+    "tnext" : {
+      "tn_a" : 3.14,
+      "tn_b" : {
+        "preprocessor-template" : "t1",
+        "other-stuff-that-will-be-lost" : "stuff"
+      },
+      "tn_c" : {
+        "preprocessor-template" : "t0",
+        "merge" : {
+          "mergenest" : {
+            "preprocessor-template" : "t1",
+            "overwrite" : {
+              "t1_b" : "bar"
+            }
+          },
+          "other" : true
+        },
+        "other-stuff-that-will-be-lost" : "stuff"
+      }
+    },
+    "t0" : {
+      "t0_a" : 1,
+      "t0_b" : 2
+    },
+    "t1" : {
+      "t1_a" : "x",
+      "t1_b" : "y"
+    }
+  },
+  "body" : {
+    "b1" : {
+      "tb_a" : 123
+    },
+    "b2" : {
+      "preprocessor-template" : "tnext",
+      "other-stuff-that-will-be-lost" : "stuff"
+    }
+  }
+}

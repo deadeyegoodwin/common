@@ -4,8 +4,65 @@ cmake_minimum_required(VERSION 3.18)
 
 include(CTest)
 
+find_package(nlohmann_json 3.2.0 REQUIRED)
+
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
+
+#
+# JsonPreprocessor
+#
+add_executable(
+  json-preprocessor-test
+  json_preprocessor_test.cc
+)
+add_dependencies(common-test json-preprocessor-test)
+
+target_compile_features(json-preprocessor-test PRIVATE cxx_std_17)
+target_compile_options(
+  json-preprocessor-test
+  PRIVATE
+    -Wall -Wextra -Werror -Wno-unused-parameter
+)
+
+set_target_properties(
+  json-preprocessor-test
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME json_preprocessor_test
+)
+
+target_link_libraries(
+  json-preprocessor-test
+  PRIVATE
+    nlohmann_json::nlohmann_json
+    common-library
+)
+
+# Expected pass
+file(GLOB_RECURSE PASS_TEST_IN_FILES "${TEST_SOURCE_DIR}/*.json.in")
+foreach(TEST_IN_FILE ${PASS_TEST_IN_FILES})
+  string(REGEX REPLACE "\\.json.in$" "" TEST_NAME ${TEST_IN_FILE})
+  string(REGEX REPLACE "\\.json.in$" "\.json.out" TEST_OUT_FILE ${TEST_IN_FILE})
+  add_test(NAME ${TEST_NAME}
+    COMMAND json_preprocessor_test ${TEST_IN_FILE} ${TEST_OUT_FILE})
+endforeach()
+
+# Expected fail
+file(GLOB_RECURSE FAIL_TEST_IN_FILES "${TEST_SOURCE_DIR}/*.json.in.fail")
+foreach(TEST_IN_FILE ${FAIL_TEST_IN_FILES})
+  string(REGEX REPLACE "\\.json.in.fail$" "_json_fail" TEST_NAME ${TEST_IN_FILE})
+  string(REGEX REPLACE "\\.json.in.fail$" "\.json.out.fail" TEST_OUT_FILE ${TEST_IN_FILE})
+  if(EXISTS "${TEST_OUT_FILE}")
+    add_test(NAME ${TEST_NAME}
+      COMMAND json_preprocessor_test ${TEST_IN_FILE} ${TEST_OUT_FILE})
+  else()
+    add_test(NAME ${TEST_NAME}
+      COMMAND json_preprocessor_test ${TEST_IN_FILE} ${TEST_IN_FILE})
+  endif()
+  set_property(TEST ${TEST_NAME} PROPERTY WILL_FAIL ON)
+endforeach()
+
 
 #
 # TaskTimewheelPool
