@@ -231,10 +231,10 @@ public:
   // 'block' == false is unsupported and causes undefined behavior.
   bool Pause(bool block = true);
 
-  // Run/unpause the pool. Function returns when pool has commenced
-  // processing tasks. Returns false if pool is in a state that does
-  // not allowing pausing. Calling this function from Task::Invoke is
-  // unsupported and causes undefined behavior.
+  // Run/unpause the pool. Function returns when all pool threads have
+  // commenced processing tasks. Returns false if pool is in a state
+  // that does not allowing pausing. Calling this function from
+  // Task::Invoke is unsupported and causes undefined behavior.
   bool Run();
 
   // Enqueue a task at relative 'time_delta'. Tasks can be enqueued at
@@ -246,7 +246,8 @@ public:
 private:
   friend class TimewheelControlTask;
 
-  enum class ControlState { RUNNING, DRAINING, PAUSING, PAUSED, STOPPING, STOPPED };
+  enum class ControlState {
+    RUNNING, DRAINING, UNPAUSING, PAUSING, PAUSED, STOPPING, STOPPED };
   static const std::string& ControlStateToName(const ControlState state);
 
   void WorkerThread();
@@ -258,6 +259,7 @@ private:
   const size_t worker_count_;
   std::vector<std::thread> work_threads_;
   size_t worker_pause_cnt_;
+  size_t worker_unpause_cnt_;
   size_t worker_stop_cnt_;
 
   const size_t bucket_count_;

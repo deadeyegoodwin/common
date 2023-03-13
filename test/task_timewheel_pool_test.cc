@@ -160,13 +160,16 @@ main(int argc, char **argv)
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
           std::to_string(i), std::chrono::milliseconds(2 * 1000), test_atomic);
-        pool.Enqueue(std::move(delay_task), 0);
+        pool.Enqueue(std::move(delay_task), 1);
       }
-      pool.Drain();
 
-      if (test_atomic != task_cnt) {
-        Fail("test 4: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
-             std::to_string(task_cnt) + ")");
+      // When we enqueue while running, draining outcome is
+      // unpredictable because of the timing between when some running
+      // thread detects no pending tasks, when tasks are enqueued, and
+      // when drain is requested. So we must keep training until all
+      // tasks are complete.
+      while (test_atomic != task_cnt) {
+        pool.Drain();
       }
     }
 
@@ -180,13 +183,16 @@ main(int argc, char **argv)
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
           std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), 0);
+        pool.Enqueue(std::move(delay_task), 1);
       }
-      pool.Drain();
 
-      if (test_atomic != task_cnt) {
-        Fail("test 5: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
-             std::to_string(task_cnt) + ")");
+      // When we enqueue while running, draining outcome is
+      // unpredictable because of the timing between when some running
+      // thread detects no pending tasks, when tasks are enqueued, and
+      // when drain is requested. So we must keep training until all
+      // tasks are complete.
+      while (test_atomic != task_cnt) {
+        pool.Drain();
       }
     }
 
@@ -280,7 +286,22 @@ main(int argc, char **argv)
       if (!pool.Stop()) { Fail("test 9: Stop() failed"); }
     }
 
-    if (test_number > 9) {
+    // Run a pool to make sure initial pause -> running works
+    // correctly.
+    if (test_number == 10) {
+      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      pool.Run();
+    }
+
+    // Run and drain a pool to make sure initial pause -> running ->
+    // draining works correctly.
+    if (test_number == 11) {
+      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      pool.Run();
+      pool.Drain();
+    }
+
+    if (test_number > 11) {
       Fail("unexpected test number " + std::to_string(test_number));
     }
   } catch (const std::exception& ex) {
