@@ -331,7 +331,7 @@ TaskTimewheelPool::Drain()
 }
 
 bool
-TaskTimewheelPool::Pause()
+TaskTimewheelPool::Pause(bool block)
 {
   std::unique_lock<std::mutex> control_lk(control_mu_);
 
@@ -353,11 +353,12 @@ TaskTimewheelPool::Pause()
     control_cv_.notify_all();
     // fall-through
 
-    // If already pausing, wait for completion.
+    // If already pausing, wait for completion if 'block' is true.
   case ControlState::PAUSING:
-    control_cv_.wait(control_lk, [this]() -> bool {
-      return control_state_ != ControlState::PAUSING; });
-    break;
+    if (block) {
+      control_cv_.wait(control_lk, [this]() -> bool {
+        return control_state_ != ControlState::PAUSING; });
+    } break;
   }
 
   return true;

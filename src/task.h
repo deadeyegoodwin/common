@@ -221,13 +221,15 @@ public:
   bool Drain();
 
   // Pause pool so that it does not process any tasks once it
-  // completes the tasks in the current time-step. Function returns
-  // when pool is paused or when another thread calls Run() or
-  // Stop(). Calling Pause() does not prevent additional tasks from
-  // being enqueued. Returns false if pool is in a state that does not
-  // allowing pausing. Calling this function from Task::Invoke is
-  // unsupported and causes undefined behavior.
-  bool Pause();
+  // completes the tasks in the current time-step. If 'block' is true,
+  // function returns when pool is paused or when another thread calls
+  // Run() or Stop(). If 'bloc' is false function returns
+  // immediately. Calling Pause() does not prevent additional tasks
+  // from being enqueued. Returns false if pool is in a state that
+  // does not allowing pausing. Calling this function from
+  // Task::Invoke is supported for 'block' == true, calling with
+  // 'block' == false is unsupported and causes undefined behavior.
+  bool Pause(bool block = true);
 
   // Run/unpause the pool. Function returns when pool has commenced
   // processing tasks. Returns false if pool is in a state that does
