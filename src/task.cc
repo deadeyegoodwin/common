@@ -608,6 +608,9 @@ TaskTimewheelPool::WorkerThread()
       bucket_idx = (bucket_idx + 1) % bucket_count_;
     }
   }
+
+  // Free all queue entries allocated in thread_local for this thread.
+  ThreadFree();
 }
 
 } // namespace common

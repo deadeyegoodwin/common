@@ -150,6 +150,15 @@ public:
     return res;
   }
 
+  // Free any thread_local allocations associated with 'this' queue.
+  void ThreadFree() {
+    while (entry_pool_ != nullptr) {
+      ck_fifo_mpmc_entry_t* entry = entry_pool_;
+      entry_pool_ = (ck_fifo_mpmc_entry_t*)entry_pool_->value;
+      free(entry);
+    }
+  }
+
 private:
   ck_fifo_mpmc_entry_t* NewEntry() {
     ck_fifo_mpmc_entry_t* entry;
@@ -242,6 +251,14 @@ public:
   // be available to process those tasks. Preferred usage it so always
   // enqueue tasks at a future time (time_delta > 0).
   void Enqueue(std::unique_ptr<Task> task, uint32_t time_delta);
+
+  // Free any thread_local allocations associated with 'this' pool.
+  void ThreadFree() {
+    input_queue_.ThreadFree();
+    for (auto& tb : time_buckets_) {
+      tb.ThreadFree();
+    }
+  }
 
 private:
   friend class TimewheelControlTask;
