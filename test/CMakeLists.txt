@@ -23,6 +23,7 @@ target_compile_options(
   json-preprocessor-test
   PRIVATE
     -Wall -Wextra -Werror -Wno-unused-parameter
+    ${COMMON_ASAN_FLAGS}
 )
 
 set_target_properties(
@@ -36,6 +37,7 @@ target_link_libraries(
   json-preprocessor-test
   PRIVATE
     nlohmann_json::nlohmann_json
+    ${COMMON_ASAN_FLAGS}
     common-library
 )
 
@@ -78,6 +80,7 @@ target_compile_options(
   task-timewheel-pool-test
   PRIVATE
     -Wall -Wextra -Werror -Wno-unused-parameter
+    ${COMMON_ASAN_FLAGS}
 )
 
 set_target_properties(
@@ -91,6 +94,7 @@ target_link_libraries(
   task-timewheel-pool-test
   PRIVATE
     Threads::Threads
+    ${COMMON_ASAN_FLAGS}
     common-library
 )
 

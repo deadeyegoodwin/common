@@ -16,7 +16,14 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
+option(ASAN "Enable ASAN" OFF)
+
 set(CK_REPO_TAG "cplusplus" CACHE STRING "Tag for concurrencykit repo")
+
+if(ASAN)
+  set(COMMON_ASAN_FLAGS "-fsanitize=address")
+endif(ASAN)
+
 
 #
 # concurrency kit
@@ -63,6 +70,7 @@ target_compile_options(
   common-library
   PRIVATE
     -Wall -Wextra -Werror -Wno-unused-parameter
+    ${COMMON_ASAN_FLAGS}
 )
 
 target_include_directories(
@@ -83,6 +91,7 @@ target_link_libraries(
   PUBLIC
     Threads::Threads
     nlohmann_json::nlohmann_json
+    ${COMMON_ASAN_FLAGS}
     ck-library
 )
 
