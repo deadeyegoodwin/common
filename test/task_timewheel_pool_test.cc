@@ -1,5 +1,6 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 
+#include <atomic>
 #include <exception>
 #include <chrono>
 #include <iostream>
@@ -7,7 +8,7 @@
 #include <thread>
 #include <unordered_map>
 #include "random.h"
-#include "task.h"
+#include "task_timewheel.h"
 
 namespace {
 
@@ -19,12 +20,13 @@ namespace {
 
 // Task that waits for a specified number of milliseconds and then
 // increments an atomic.
-class DelayTask : public common::Task {
+class DelayTask : public common::TaskTimewheelPool::Task {
 public:
-  DelayTask(const std::string& name, const std::chrono::milliseconds& duration, std::atomic<size_t>& inc) :
-    name_(name), duration_(duration), inc_(inc) { }
+  DelayTask(const std::string& name, const std::chrono::milliseconds& duration,
+            std::atomic<size_t>& inc, common::TaskTimewheelPool& pool) :
+    common::TaskTimewheelPool::Task(pool), name_(name), duration_(duration), inc_(inc) { }
 
-  bool Invoke(uint64_t time_step) override {
+  bool Invoke(uint64_t time_step, common::LocklessMultiQueueAllocator& allocator) override {
     if (duration_.count() > 0) {
       std::this_thread::sleep_for(duration_);
     }
@@ -39,12 +41,13 @@ private:
 };
 
 // Task that safely pushes an identifier onto a shared vector.
-class PushTask : public common::Task {
+class PushTask : public common::TaskTimewheelPool::Task {
 public:
-  PushTask(const std::string& name, std::vector<int32_t>& vec, const int32_t id) :
-    name_(name), vec_(vec), id_(id) { }
+  PushTask(const std::string& name, std::vector<int32_t>& vec,
+           const int32_t id, common::TaskTimewheelPool& pool) :
+    common::TaskTimewheelPool::Task(pool), name_(name), vec_(vec), id_(id) { }
 
-  bool Invoke(uint64_t time_step) {
+  bool Invoke(uint64_t time_step, common::LocklessMultiQueueAllocator& allocator) {
     static std::mutex mu;
     std::lock_guard<std::mutex> lk(mu);
     vec_.push_back(id_);
@@ -98,16 +101,18 @@ main(int argc, char **argv)
       const size_t task_cnt = 1024 * 1024;
       std::atomic<size_t> test_atomic { 0 };
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1));
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
       }
       pool.Drain();
 
       if (test_atomic != task_cnt) {
-        Fail("test 1: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
+        Fail("test " + std::to_string(test_number) + ": " +
+             "atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
              std::to_string(task_cnt) + ")");
       }
     }
@@ -117,16 +122,18 @@ main(int argc, char **argv)
       const size_t task_cnt = 1024 * 2;
       std::atomic<size_t> test_atomic { 0 };
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(random(0, 20)), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1));
+          std::to_string(i), std::chrono::milliseconds(random(0, 20)), test_atomic, pool);
+        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
       }
       pool.Drain();
 
       if (test_atomic != task_cnt) {
-        Fail("test 2: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
+        Fail("test " + std::to_string(test_number) + ": " +
+             "atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
              std::to_string(task_cnt) + ")");
       }
     }
@@ -136,16 +143,18 @@ main(int argc, char **argv)
       const size_t task_cnt = 1024 * 1024;
       std::atomic<size_t> test_atomic { 0 };
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), 0);
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+        pool.Enqueue(std::move(delay_task), 0, allocator);
       }
       pool.Drain();
 
       if (test_atomic != task_cnt) {
-        Fail("test 3: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
+        Fail("test " + std::to_string(test_number) + ": " +
+             "atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
              std::to_string(task_cnt) + ")");
       }
     }
@@ -155,12 +164,13 @@ main(int argc, char **argv)
       const size_t task_cnt = 16;
       std::atomic<size_t> test_atomic { 0 };
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
       pool.Run();
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(2 * 1000), test_atomic);
-        pool.Enqueue(std::move(delay_task), 1);
+          std::to_string(i), std::chrono::milliseconds(2 * 1000), test_atomic, pool);
+        pool.Enqueue(std::move(delay_task), 1, allocator);
       }
 
       // When we enqueue while running, draining outcome is
@@ -178,12 +188,13 @@ main(int argc, char **argv)
       const size_t task_cnt = 1024 * 1024;
       std::atomic<size_t> test_atomic { 0 };
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
       pool.Run();
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), 1);
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+        pool.Enqueue(std::move(delay_task), 1, allocator);
       }
 
       // When we enqueue while running, draining outcome is
@@ -201,50 +212,82 @@ main(int argc, char **argv)
       const size_t task_cnt = 1024 * 1024;
       std::atomic<size_t> test_atomic { 0 };
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, 3 * time_bucket_cnt));
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+        pool.Enqueue(std::move(delay_task), random(0, 3 * time_bucket_cnt), allocator);
       }
       pool.Drain();
 
       if (test_atomic != task_cnt) {
-        Fail("test 6: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
+        Fail("test " + std::to_string(test_number) + ": " +
+             "atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
              std::to_string(task_cnt) + ")");
       }
     }
 
     // Check that tasks invoked in time-delay order
     if (test_number == 7) {
-      std::vector<int32_t> vec;
-      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
-      std::unordered_map<int32_t, uint32_t> delays {
-        { 0, 0 },
-        { 1, 1 },
-        { 2, 2 },
-        { 3, time_bucket_cnt - 1 },
-        { 4, time_bucket_cnt },
-        { 5, time_bucket_cnt + 1 },
-        { 6, (time_bucket_cnt * 2) - 1 },
-        { 7, (time_bucket_cnt * 2) },
-        { 8, (time_bucket_cnt * 2) + 1 }
+      std::vector<std::unordered_map<int32_t, uint32_t>> delay_list {
+        { { 0, 0 }, { 1, 1 }, { 2, 2 }, { 3, 3 } },
+        { { 3, 100 }, { 1, 25 }, { 0, 1 }, { 2, 26 } },
+        { { 0, 0 },
+          { 1, 1 },
+          { 2, 2 },
+          { 3, time_bucket_cnt - 1 },
+          { 4, time_bucket_cnt },
+          { 5, time_bucket_cnt + 1 },
+          { 6, (time_bucket_cnt * 2) - 1 },
+          { 7, (time_bucket_cnt * 2) },
+          { 8, (time_bucket_cnt * 2) + 1 }
+        },
+        { { 8, (time_bucket_cnt * 2) + 1 },
+          { 0, 0 },
+          { 2, 2 },
+          { 1, 1 },
+          { 4, time_bucket_cnt },
+          { 5, time_bucket_cnt + 1 },
+          { 7, (time_bucket_cnt * 2) },
+          { 3, time_bucket_cnt - 1 },
+          { 6, (time_bucket_cnt * 2) - 1 },
+        }
       };
-      for (const auto& pr : delays) {
-        auto task = std::make_unique<PushTask>(std::to_string(pr.first), vec, pr.first);
-        pool.Enqueue(std::move(task), pr.second);
-      }
-      pool.Drain();
 
-      if (vec.size() != delays.size()) {
-        Fail("test 7: vector size (" + std::to_string(vec.size()) + ") != delays (" +
-             std::to_string(delays.size()) + ")");
-      }
+      common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
-      for (size_t i = 0; i < delays.size(); ++i) {
-        if (vec[i] != (int32_t)i) {
-          Fail("test 7: vector[" + std::to_string(i) + "]=" + std::to_string(vec[i]) +
-               ", expecting " + std::to_string(i));
+      for (const auto& delays : delay_list) {
+        std::vector<int32_t> vec;
+        for (const auto& pr : delays) {
+          auto task = std::make_unique<PushTask>(
+            std::to_string(pr.first), vec, pr.first, pool);
+          pool.Enqueue(std::move(task), pr.second, allocator);
+        }
+        pool.Drain();
+
+        bool fail = (vec.size() != delays.size());
+        if (!fail) {
+          for (size_t i = 0; i < delays.size(); ++i) {
+            if (vec[i] != (int32_t)i) {
+              fail = true;
+              break;
+            }
+          }
+        }
+        if (fail) {
+          std::cerr << "test " << test_number << ": " << std::endl;
+          std::cerr << "  expected: ";
+          for (size_t i = 0; i < delays.size(); ++i) {
+            std::cerr << i << ", ";
+          }
+          std::cerr << std::endl << "  got: ";
+          for (auto vi : vec) {
+            std::cerr << vi << ", ";
+          }
+          std::cerr << std::endl;
+          Fail(true);
         }
       }
     }
@@ -254,14 +297,15 @@ main(int argc, char **argv)
       const size_t task_cnt = 1024 * 1024;
       std::atomic<size_t> test_atomic { 0 };
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
+      common::LocklessMultiQueueAllocator allocator;
 
       pool.Drain();
       pool.Pause();
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1));
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
       }
       pool.Pause();
       pool.Drain();
@@ -270,7 +314,8 @@ main(int argc, char **argv)
       pool.Stop();
 
       if (test_atomic != task_cnt) {
-        Fail("test 8: atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
+        Fail("test " + std::to_string(test_number) + ": " +
+             "atomic value (" + std::to_string(test_atomic.load()) + ") != task count (" +
              std::to_string(task_cnt) + ")");
       }
     }
@@ -279,11 +324,21 @@ main(int argc, char **argv)
     if (test_number == 9) {
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
 
-      if (!pool.Stop()) { Fail("test 9: Stop() failed"); }
-      if (pool.Pause()) { Fail("test 9: Pause() unexpected pass"); }
-      if (pool.Drain()) { Fail("test 9: Drain() unexpected pass"); }
-      if (pool.Run()) { Fail("test 9: Run() unexpected pass"); }
-      if (!pool.Stop()) { Fail("test 9: Stop() failed"); }
+      if (!pool.Stop()) {
+        Fail("test " + std::to_string(test_number) + ": Stop() failed");
+      }
+      if (pool.Pause()) {
+        Fail("test " + std::to_string(test_number) + ": Pause() unexpected pass");
+      }
+      if (pool.Drain()) {
+        Fail("test " + std::to_string(test_number) + ": Drain() unexpected pass");
+      }
+      if (pool.Run()) {
+        Fail("test " + std::to_string(test_number) + ": Run() unexpected pass");
+      }
+      if (!pool.Stop()) {
+        Fail("test " + std::to_string(test_number) + ": Stop() failed");
+      }
     }
 
     // Run a pool to make sure initial pause -> running works

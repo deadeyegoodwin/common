@@ -1,123 +1,8 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 
-#include "task.h"
+#include "task_timewheel.h"
 
 namespace common {
-
-thread_local ck_fifo_mpmc_entry_t* TaskLocklessMultiQueue::entry_pool_ = nullptr;
-
-//
-//
-TaskPool::TaskPool(const size_t worker_count)
-{
-  if (worker_count == 0) {
-    throw Exception("TaskPool requires at least 1 worker");
-  }
-
-  // The "work loop" for each thread. Waits for new task to be
-  // available, executes the task and then places the task on the
-  // completed queue.
-  const auto work_loop = [this]() {
-    while (true) {
-      std::unique_ptr<Task> task;
-
-      // Get pending task...
-      {
-        std::unique_lock<std::mutex> lk(pending_queue_mu_);
-        pending_queue_cv_.wait(lk, [&]() -> bool { return !pending_queue_.empty() || exiting_; });
-        if (exiting_ && pending_queue_.empty()) {
-          break;
-        }
-
-        task = std::move(pending_queue_.front());
-        pending_queue_.pop_front();
-      }
-
-      // Invoke the task. If TaskInvoke takes ownership of 'task' then
-      // don't return it on the completed queue.
-      Task* rtask = task.release();
-      if (!rtask->Invoke(0)) {
-        task.reset(rtask);
-
-        std::lock_guard<std::mutex> lk(completed_queue_mu_);
-        completed_queue_.push_back(std::move(task));
-        completed_queue_cv_.notify_one();
-      }
-    }
-  };
-
-  work_threads_.reserve(worker_count);
-  for (size_t i = 0; i < worker_count; ++i) {
-    work_threads_.emplace_back(work_loop);
-  }
-}
-
-TaskPool::~TaskPool()
-{
-  exiting_ = true;
-  pending_queue_cv_.notify_all();
-  for (auto& thd : work_threads_) {
-    if (thd.joinable()) {
-      thd.join();
-    }
-  }
-
-  completed_queue_cv_.notify_all();
-}
-
-size_t
-TaskPool::InFlightTaskCount() const
-{
-  return in_flight_task_count_;
-}
-
-void
-TaskPool::Enqueue(std::unique_ptr<Task> task)
-{
-  in_flight_task_count_ += 1;
-
-  std::lock_guard<std::mutex> lk(pending_queue_mu_);
-  pending_queue_.push_back(std::move(task));
-  pending_queue_cv_.notify_one();
-}
-
-bool
-TaskPool::Dequeue(std::unique_ptr<Task>& task)
-{
-  std::unique_lock<std::mutex> lk(completed_queue_mu_);
-  completed_queue_cv_.wait(lk, [&]() -> bool { return !completed_queue_.empty() || exiting_; });
-  if (exiting_ && completed_queue_.empty()) {
-    return false;
-  }
-
-  task = std::move(completed_queue_.front());
-  completed_queue_.pop_front();
-
-  in_flight_task_count_ -= 1;
-
-  return true;
-}
-
-bool
-TaskPool::Dequeue(std::unique_ptr<Task>& task,
-                  const std::chrono::duration<uint32_t, std::milli>& timeout)
-{
-  std::unique_lock<std::mutex> lk(completed_queue_mu_);
-  if (!completed_queue_cv_.wait_for(
-        lk, timeout, [&]() -> bool { return !completed_queue_.empty() || exiting_; })) {
-    return false;
-  }
-  if (exiting_ && completed_queue_.empty()) {
-    return false;
-  }
-
-  task = std::move(completed_queue_.front());
-  completed_queue_.pop_front();
-
-  in_flight_task_count_ -= 1;
-
-  return true;
-}
 
 //
 // TaskTimewheelWorkerExitException
@@ -132,14 +17,14 @@ class TaskTimewheelWorkerExitException : public std::exception {};
 // Task responsible handling changes in the control state of a
 // TaskTimewheelPool.
 //
-class TimewheelControlTask : public common::Task {
+class TimewheelControlTask : public TaskTimewheelPool::Task {
 public:
   enum class Kind { PAUSE_MASTER, PAUSE, UNPAUSE, STOP_MASTER, STOP };
 
   TimewheelControlTask(Kind kind, TaskTimewheelPool& pool) :
-    kind_(kind), pool_(pool) { }
+    TaskTimewheelPool::Task(pool), kind_(kind) { }
 
-  bool Invoke(uint64_t time_step) override {
+  bool Invoke(uint64_t time_step, LocklessMultiQueueAllocator& allocator) override {
     switch (kind_) {
       // Enqueue one PAUSE task for each worker thread in the next
       // time-step. We need to do this enqueue from a worker thread to
@@ -150,8 +35,9 @@ public:
     case Kind::PAUSE_MASTER:
       pool_.worker_pause_cnt_ = pool_.worker_count_;
       for (size_t w = 0; w < pool_.worker_count_; ++w) {
-        pool_.Enqueue(std::make_unique<TimewheelControlTask>(
-                        TimewheelControlTask::Kind::PAUSE, pool_), 1 /* time_delta */);
+        Enqueue(std::make_unique<TimewheelControlTask>(
+                  TimewheelControlTask::Kind::PAUSE, pool_),
+                1 /* time_delta */, allocator);
       }
       break;
 
@@ -207,8 +93,9 @@ public:
     case Kind::STOP_MASTER:
       pool_.worker_stop_cnt_ = pool_.worker_count_;
       for (size_t w = 0; w < pool_.worker_count_; ++w) {
-        pool_.Enqueue(std::make_unique<TimewheelControlTask>(
-                        TimewheelControlTask::Kind::STOP, pool_), 1 /* time_delta */);
+        Enqueue(std::make_unique<TimewheelControlTask>(
+                  TimewheelControlTask::Kind::STOP, pool_),
+                1 /* time_delta */, allocator);
       }
       break;
 
@@ -233,7 +120,6 @@ public:
 
 private:
   Kind kind_;
-  TaskTimewheelPool& pool_;
 };
 
 //
@@ -257,7 +143,8 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
   worker_pause_cnt_ = worker_count_;
   for (size_t w = 0; w < worker_count_; ++w) {
     Enqueue(std::make_unique<TimewheelControlTask>(
-              TimewheelControlTask::Kind::PAUSE, *this), 0 /* time_delta */);
+              TimewheelControlTask::Kind::PAUSE, *this),
+            0 /* time_delta */, default_allocator_);
   }
 
   work_threads_.reserve(worker_count_);
@@ -290,7 +177,8 @@ TaskTimewheelPool::Stop()
     case ControlState::RUNNING:
       control_state_ = ControlState::STOPPING;
       Enqueue(std::make_unique<TimewheelControlTask>(
-                TimewheelControlTask::Kind::STOP_MASTER, *this), 0);
+                TimewheelControlTask::Kind::STOP_MASTER, *this),
+              0 /* time-step */, default_allocator_);
       control_cv_.notify_all();
       // fall-through
 
@@ -399,7 +287,8 @@ TaskTimewheelPool::Pause(bool block)
   case ControlState::RUNNING:
     control_state_ = ControlState::PAUSING;
     Enqueue(std::make_unique<TimewheelControlTask>(
-              TimewheelControlTask::Kind::PAUSE_MASTER, *this), 0);
+              TimewheelControlTask::Kind::PAUSE_MASTER, *this),
+              0 /* time-step */, default_allocator_);
     control_cv_.notify_all();
     if (block) {
       control_cv_.wait(control_lk, [this]() -> bool {
@@ -451,7 +340,8 @@ TaskTimewheelPool::Run()
     worker_unpause_cnt_ = worker_count_;
     for (size_t w = 0; w < worker_count_; ++w) {
       Enqueue(std::make_unique<TimewheelControlTask>(
-                TimewheelControlTask::Kind::UNPAUSE, *this), 0 /* time_delta */);
+                TimewheelControlTask::Kind::UNPAUSE, *this),
+              0 /* time-step */, default_allocator_);
     }
     control_cv_.notify_all();
     control_cv_.wait(control_lk, [this]() -> bool {
@@ -500,11 +390,21 @@ TaskTimewheelPool::ControlStateToName(const ControlState state)
 }
 
 void
-TaskTimewheelPool::Enqueue(std::unique_ptr<Task> task, uint32_t time_delta)
+TaskTimewheelPool::Enqueue(std::unique_ptr<Task>& task, uint32_t time_delta,
+                           LocklessMultiQueueAllocator& allocator)
 {
   ck_pr_inc_32(&in_flight_task_count_);
-  task->payload_ = time_delta;
-  input_queue_.Enqueue(std::move(task));
+  task->remaining_time_steps_ = time_delta;
+  input_queue_.Enqueue(std::move(task), allocator);
+}
+
+void
+TaskTimewheelPool::Enqueue(std::unique_ptr<Task>&& task, uint32_t time_delta,
+                           LocklessMultiQueueAllocator& allocator)
+{
+  ck_pr_inc_32(&in_flight_task_count_);
+  task->remaining_time_steps_ = time_delta;
+  input_queue_.Enqueue(std::move(task), allocator);
 }
 
 void
@@ -516,6 +416,10 @@ TaskTimewheelPool::WorkerThread()
   ck_barrier_centralized_state_t next_barrier_state = CK_BARRIER_CENTRALIZED_STATE_INITIALIZER;
   size_t bucket_idx = 0;
 
+  // Use a lockless allocator for this thread. Lock is not needed
+  // because this thread is the only user of this allocator.
+  LocklessMultiQueuePoolAllocator entry_allocator;
+
   // The "work loop" for each thread. Thread first tries queue for the
   // current bucket, if that is empty it then process input_queue_ to
   // place any incoming tasks into the appropriate bucket queue. If
@@ -525,21 +429,21 @@ TaskTimewheelPool::WorkerThread()
   while (true) {
     // Current bucket...
     std::unique_ptr<Task> task;
-    if (time_buckets_[bucket_idx].Dequeue(task)) {
+    if (time_buckets_[bucket_idx].Dequeue(task, entry_allocator)) {
       // If there is a residue time-delta for the task, then
       // re-enqueue the task in the appropriate future bucket.
-      size_t time_delta = task->payload_;
+      size_t time_delta = task->remaining_time_steps_;
       if (time_delta > 0) {
         if (time_delta >= bucket_count_) {
           time_delta = (bucket_count_ - 1);
-          task->payload_ -= time_delta;
+          task->remaining_time_steps_ -= time_delta;
         }
         else {
-          task->payload_ = 0;
+          task->remaining_time_steps_ = 0;
         }
 
         const size_t idx = (bucket_idx + time_delta) % bucket_count_;
-        time_buckets_[idx].Enqueue(std::move(task));
+        time_buckets_[idx].Enqueue(std::move(task), entry_allocator);
       }
       // ... otherwise invoke the task.
       else {
@@ -547,7 +451,7 @@ TaskTimewheelPool::WorkerThread()
         bool rtask_owner = false;
         Task* rtask = task.release();
         try {
-          rtask_owner = !rtask->Invoke(generation_idx);
+          rtask_owner = !rtask->Invoke(generation_idx, entry_allocator);
         }
         catch (const TaskTimewheelWorkerExitException&) {
           exit_worker = true;
@@ -566,24 +470,25 @@ TaskTimewheelPool::WorkerThread()
       }
     }
     // Input queue...
-    else if (input_queue_.Dequeue(task)) {
-      // 'payload_' is the time-delta for the task, use it to
-      // determine the appropriate bucket. If time-delta is farther in
-      // the future than the most-future bucket, then enqueue it in
-      // the most-future bucket with 'payload_' set to the remaining
-      // time-delta. When it is removed from the most-future bucket it
-      // will be reevaluated for the correct bucket.
-      size_t time_delta = task->payload_;
+    else if (input_queue_.Dequeue(task, entry_allocator)) {
+      // 'remaining_time_steps_' is the time-delta for the task, use
+      // it to determine the appropriate bucket. If time-delta is
+      // farther in the future than the most-future bucket, then
+      // enqueue it in the most-future bucket with
+      // 'remaining_time_steps_' set to the remaining time-delta. When
+      // it is removed from the most-future bucket it will be
+      // reevaluated for the correct bucket.
+      size_t time_delta = task->remaining_time_steps_;
       if (time_delta >= bucket_count_) {
         time_delta = (bucket_count_ - 1);
-        task->payload_ -= time_delta;
+        task->remaining_time_steps_ -= time_delta;
       }
       else {
-        task->payload_ = 0;
+        task->remaining_time_steps_ = 0;
       }
 
       const size_t idx = (bucket_idx + time_delta) % bucket_count_;
-      time_buckets_[idx].Enqueue(std::move(task));
+      time_buckets_[idx].Enqueue(std::move(task), entry_allocator);
     }
     // Next barrier, synchronize threads so that they all receive any
     // pending control signal and all move on to the next bucket
@@ -597,7 +502,8 @@ TaskTimewheelPool::WorkerThread()
         if (control_state_ == ControlState::DRAINING) {
           control_state_ = ControlState::PAUSING;
           Enqueue(std::make_unique<TimewheelControlTask>(
-                    TimewheelControlTask::Kind::PAUSE_MASTER, *this), 0);
+                    TimewheelControlTask::Kind::PAUSE_MASTER, *this),
+                  0 /* time-step */, entry_allocator);
           control_cv_.notify_all();
         }
       }
@@ -608,9 +514,6 @@ TaskTimewheelPool::WorkerThread()
       bucket_idx = (bucket_idx + 1) % bucket_count_;
     }
   }
-
-  // Free all queue entries allocated in thread_local for this thread.
-  ThreadFree();
 }
 
 } // namespace common
