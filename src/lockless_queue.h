@@ -1,6 +1,8 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 #pragma once
 
+#include "spinlock.h"
+
 extern "C" {
 #include "ck_fifo.h"
 }
@@ -96,6 +98,66 @@ public:
   }
 
 private:
+  const size_t pool_max_size_;
+  size_t pool_size_;
+  ck_fifo_mpmc_entry_t* pool_;
+};
+
+//
+// LocklessMultiQueueSpinlockAllocator
+//
+// Allocator class that maintains a pool of allocations for
+// reuse/recycle. No locking is used so the caller must manage the
+// thread-safety of using this allocator. Typically this is done by
+// ensuring that each thread uses a unique
+// LocklessMultiQueueSpinlockAllocator.
+//
+class LocklessMultiQueueSpinlockAllocator : public LocklessMultiQueueAllocator {
+public:
+  LocklessMultiQueueSpinlockAllocator(size_t pool_max_size = 1024) :
+    pool_max_size_(pool_max_size), pool_size_(0), pool_(nullptr) { }
+  ~LocklessMultiQueueSpinlockAllocator() { Clear(); }
+
+  virtual ck_fifo_mpmc_entry_t* Allocate() override {
+    ck_fifo_mpmc_entry_t* entry;
+    if (pool_ == nullptr) {
+      entry = (ck_fifo_mpmc_entry_t*)malloc(sizeof(ck_fifo_mpmc_entry_t));
+    }
+    else {
+      ScopedSpinlock lk(lock_);
+      entry = pool_;
+      pool_ = (ck_fifo_mpmc_entry_t*)pool_->value;
+      --pool_size_;
+    }
+    return entry;
+  }
+
+  virtual void Release(ck_fifo_mpmc_entry_t* entry) override {
+    if (entry != nullptr) {
+      if (pool_size_ >= pool_max_size_) {
+        free(entry);
+      }
+      else {
+        ScopedSpinlock lk(lock_);
+        entry->value = pool_;
+        pool_ = entry;
+        ++pool_size_;
+      }
+    }
+  }
+
+  virtual void Clear() override {
+    ScopedSpinlock lk(lock_);
+    while (pool_ != nullptr) {
+      ck_fifo_mpmc_entry_t* entry = pool_;
+      pool_ = (ck_fifo_mpmc_entry_t*)pool_->value;
+      free(entry);
+    }
+    pool_size_ = 0;
+  }
+
+private:
+  Spinlock lock_;
   const size_t pool_max_size_;
   size_t pool_size_;
   ck_fifo_mpmc_entry_t* pool_;
