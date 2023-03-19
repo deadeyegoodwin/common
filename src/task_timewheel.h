@@ -44,7 +44,9 @@ public:
   // invoked in timewheel-pool.
   class Task {
   public:
-    Task(TaskTimewheelPool& pool) : pool_(pool) { }
+    // Create a task for 'pool'. 'pool' may be nullptr but then cannot
+    // be used within Task::Invoke() nor can Task::Enqueue() be used.
+    Task(TaskTimewheelPool* pool = nullptr) : pool_(pool) { }
     virtual ~Task() = default;
 
     // Invoke task and transfer ownership of the task to the Invoke()
@@ -65,16 +67,16 @@ public:
     // the LocklessMultiQueue allocator to use when enqueuing the task.
     void Enqueue(std::unique_ptr<Task>& task, uint32_t time_delta,
                  LocklessMultiQueueAllocator& allocator) {
-      pool_.Enqueue(task, time_delta, allocator);
+      pool_->Enqueue(task, time_delta, allocator);
     }
     void Enqueue(std::unique_ptr<Task>&& task, uint32_t time_delta,
                  LocklessMultiQueueAllocator& allocator) {
-      pool_.Enqueue(task, time_delta, allocator);
+      pool_->Enqueue(task, time_delta, allocator);
     }
 
   protected:
     // The pool that is managing this task.
-    TaskTimewheelPool& pool_;
+    TaskTimewheelPool* pool_;
 
   private:
     friend class TaskTimewheelPool;

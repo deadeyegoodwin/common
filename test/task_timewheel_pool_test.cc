@@ -23,8 +23,8 @@ namespace {
 class DelayTask : public common::TaskTimewheelPool::Task {
 public:
   DelayTask(const std::string& name, const std::chrono::milliseconds& duration,
-            std::atomic<size_t>& inc, common::TaskTimewheelPool& pool) :
-    common::TaskTimewheelPool::Task(pool), name_(name), duration_(duration), inc_(inc) { }
+            std::atomic<size_t>& inc) :
+    name_(name), duration_(duration), inc_(inc) { }
 
   bool Invoke(uint64_t time_step, common::LocklessMultiQueueAllocator& allocator) override {
     if (duration_.count() > 0) {
@@ -43,9 +43,8 @@ private:
 // Task that safely pushes an identifier onto a shared vector.
 class PushTask : public common::TaskTimewheelPool::Task {
 public:
-  PushTask(const std::string& name, std::vector<int32_t>& vec,
-           const int32_t id, common::TaskTimewheelPool& pool) :
-    common::TaskTimewheelPool::Task(pool), name_(name), vec_(vec), id_(id) { }
+  PushTask(const std::string& name, std::vector<int32_t>& vec, const int32_t id) :
+    name_(name), vec_(vec), id_(id) { }
 
   bool Invoke(uint64_t time_step, common::LocklessMultiQueueAllocator& allocator) {
     static std::mutex mu;
@@ -105,7 +104,7 @@ main(int argc, char **argv)
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
         pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
       }
       pool.Drain();
@@ -126,7 +125,7 @@ main(int argc, char **argv)
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(random(0, 20)), test_atomic, pool);
+          std::to_string(i), std::chrono::milliseconds(random(0, 20)), test_atomic);
         pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
       }
       pool.Drain();
@@ -147,7 +146,7 @@ main(int argc, char **argv)
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
         pool.Enqueue(std::move(delay_task), 0, allocator);
       }
       pool.Drain();
@@ -169,7 +168,7 @@ main(int argc, char **argv)
       pool.Run();
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(2 * 1000), test_atomic, pool);
+          std::to_string(i), std::chrono::milliseconds(2 * 1000), test_atomic);
         pool.Enqueue(std::move(delay_task), 1, allocator);
       }
 
@@ -193,7 +192,7 @@ main(int argc, char **argv)
       pool.Run();
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
         pool.Enqueue(std::move(delay_task), 1, allocator);
       }
 
@@ -216,7 +215,7 @@ main(int argc, char **argv)
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
         pool.Enqueue(std::move(delay_task), random(0, 3 * time_bucket_cnt), allocator);
       }
       pool.Drain();
@@ -262,7 +261,7 @@ main(int argc, char **argv)
         std::vector<int32_t> vec;
         for (const auto& pr : delays) {
           auto task = std::make_unique<PushTask>(
-            std::to_string(pr.first), vec, pr.first, pool);
+            std::to_string(pr.first), vec, pr.first);
           pool.Enqueue(std::move(task), pr.second, allocator);
         }
         pool.Drain();
@@ -304,7 +303,7 @@ main(int argc, char **argv)
 
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
-          std::to_string(i), std::chrono::milliseconds(0), test_atomic, pool);
+          std::to_string(i), std::chrono::milliseconds(0), test_atomic);
         pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
       }
       pool.Pause();

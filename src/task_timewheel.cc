@@ -21,7 +21,7 @@ class TimewheelControlTask : public TaskTimewheelPool::Task {
 public:
   enum class Kind { PAUSE_MASTER, PAUSE, UNPAUSE, STOP_MASTER, STOP };
 
-  TimewheelControlTask(Kind kind, TaskTimewheelPool& pool) :
+  TimewheelControlTask(Kind kind, TaskTimewheelPool* pool) :
     TaskTimewheelPool::Task(pool), kind_(kind) { }
 
   bool Invoke(uint64_t time_step, LocklessMultiQueueAllocator& allocator) override {
@@ -33,8 +33,8 @@ public:
       // threads in the "next" barrier and others that
       // pause... resulting in a hang).
     case Kind::PAUSE_MASTER:
-      pool_.worker_pause_cnt_ = pool_.worker_count_;
-      for (size_t w = 0; w < pool_.worker_count_; ++w) {
+      pool_->worker_pause_cnt_ = pool_->worker_count_;
+      for (size_t w = 0; w < pool_->worker_count_; ++w) {
         Enqueue(std::make_unique<TimewheelControlTask>(
                   TimewheelControlTask::Kind::PAUSE, pool_),
                 1 /* time_delta */, allocator);
@@ -46,20 +46,20 @@ public:
       // place where PAUSING->PAUSE, and from the PAUSING state the
       // only other possible transition is to STOPPING.
     case Kind::PAUSE: {
-      std::unique_lock<std::mutex> control_lk(pool_.control_mu_);
-      if (pool_.control_state_ == TaskTimewheelPool::ControlState::PAUSING) {
-        if (--pool_.worker_pause_cnt_ == 0) {
-          pool_.control_state_ = TaskTimewheelPool::ControlState::PAUSED;
-          pool_.control_cv_.notify_all();
+      std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
+      if (pool_->control_state_ == TaskTimewheelPool::ControlState::PAUSING) {
+        if (--pool_->worker_pause_cnt_ == 0) {
+          pool_->control_state_ = TaskTimewheelPool::ControlState::PAUSED;
+          pool_->control_cv_.notify_all();
         }
-        pool_.control_cv_.wait(control_lk, [this]() -> bool {
-          return ((pool_.control_state_ != TaskTimewheelPool::ControlState::PAUSING) &&
-                  (pool_.control_state_ != TaskTimewheelPool::ControlState::PAUSED)); });
+        pool_->control_cv_.wait(control_lk, [this]() -> bool {
+          return ((pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSING) &&
+                  (pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSED)); });
       }
-      else if (pool_.control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
+      else if (pool_->control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
         throw common::Exception(
           "TaskTimewheelPool worker encountered unexpected PAUSE state: " +
-          TaskTimewheelPool::ControlStateToName(pool_.control_state_));
+          TaskTimewheelPool::ControlStateToName(pool_->control_state_));
       }
     } break;
 
@@ -68,20 +68,20 @@ public:
       // only place where UNPAUSING->RUNNING, and from the UNPAUSING
       // state the only other possible transition is to STOPPING.
     case Kind::UNPAUSE: {
-      std::unique_lock<std::mutex> control_lk(pool_.control_mu_);
-      if (pool_.control_state_ == TaskTimewheelPool::ControlState::UNPAUSING) {
-        if (--pool_.worker_unpause_cnt_ == 0) {
-          pool_.control_state_ = TaskTimewheelPool::ControlState::RUNNING;
-          pool_.control_cv_.notify_all();
+      std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
+      if (pool_->control_state_ == TaskTimewheelPool::ControlState::UNPAUSING) {
+        if (--pool_->worker_unpause_cnt_ == 0) {
+          pool_->control_state_ = TaskTimewheelPool::ControlState::RUNNING;
+          pool_->control_cv_.notify_all();
         } else {
-          pool_.control_cv_.wait(control_lk, [this]() -> bool {
-            return pool_.control_state_ != TaskTimewheelPool::ControlState::UNPAUSING; });
+          pool_->control_cv_.wait(control_lk, [this]() -> bool {
+            return pool_->control_state_ != TaskTimewheelPool::ControlState::UNPAUSING; });
         }
       }
-      else if (pool_.control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
+      else if (pool_->control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
         throw common::Exception(
           "TaskTimewheelPool worker encountered unexpected UNPAUSE state: " +
-          TaskTimewheelPool::ControlStateToName(pool_.control_state_));
+          TaskTimewheelPool::ControlStateToName(pool_->control_state_));
       }
     } break;
 
@@ -91,8 +91,8 @@ public:
       // see the STOP (if we don't do it this way there could be some
       // threads stuck in the "next" barrier).
     case Kind::STOP_MASTER:
-      pool_.worker_stop_cnt_ = pool_.worker_count_;
-      for (size_t w = 0; w < pool_.worker_count_; ++w) {
+      pool_->worker_stop_cnt_ = pool_->worker_count_;
+      for (size_t w = 0; w < pool_->worker_count_; ++w) {
         Enqueue(std::make_unique<TimewheelControlTask>(
                   TimewheelControlTask::Kind::STOP, pool_),
                 1 /* time_delta */, allocator);
@@ -103,13 +103,13 @@ public:
       // state to STOPPED. This is the only place where
       // STOPPING->STOPPED.
     case Kind::STOP: {
-      std::unique_lock<std::mutex> control_lk(pool_.control_mu_);
-      if (pool_.control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
+      std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
+      if (pool_->control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
         throw common::Exception("TaskTimewheelPool worker expected STOPPING state");
       }
-      if (--pool_.worker_stop_cnt_ == 0) {
-        pool_.control_state_ = TaskTimewheelPool::ControlState::STOPPED;
-        pool_.control_cv_.notify_all();
+      if (--pool_->worker_stop_cnt_ == 0) {
+        pool_->control_state_ = TaskTimewheelPool::ControlState::STOPPED;
+        pool_->control_cv_.notify_all();
       }
       throw TaskTimewheelWorkerExitException();
     } break;
@@ -143,7 +143,7 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
   worker_pause_cnt_ = worker_count_;
   for (size_t w = 0; w < worker_count_; ++w) {
     Enqueue(std::make_unique<TimewheelControlTask>(
-              TimewheelControlTask::Kind::PAUSE, *this),
+              TimewheelControlTask::Kind::PAUSE, this),
             0 /* time_delta */, default_allocator_);
   }
 
@@ -177,7 +177,7 @@ TaskTimewheelPool::Stop()
     case ControlState::RUNNING:
       control_state_ = ControlState::STOPPING;
       Enqueue(std::make_unique<TimewheelControlTask>(
-                TimewheelControlTask::Kind::STOP_MASTER, *this),
+                TimewheelControlTask::Kind::STOP_MASTER, this),
               0 /* time-step */, default_allocator_);
       control_cv_.notify_all();
       // fall-through
@@ -287,7 +287,7 @@ TaskTimewheelPool::Pause(bool block)
   case ControlState::RUNNING:
     control_state_ = ControlState::PAUSING;
     Enqueue(std::make_unique<TimewheelControlTask>(
-              TimewheelControlTask::Kind::PAUSE_MASTER, *this),
+              TimewheelControlTask::Kind::PAUSE_MASTER, this),
               0 /* time-step */, default_allocator_);
     control_cv_.notify_all();
     if (block) {
@@ -340,7 +340,7 @@ TaskTimewheelPool::Run()
     worker_unpause_cnt_ = worker_count_;
     for (size_t w = 0; w < worker_count_; ++w) {
       Enqueue(std::make_unique<TimewheelControlTask>(
-                TimewheelControlTask::Kind::UNPAUSE, *this),
+                TimewheelControlTask::Kind::UNPAUSE, this),
               0 /* time-step */, default_allocator_);
     }
     control_cv_.notify_all();
@@ -502,7 +502,7 @@ TaskTimewheelPool::WorkerThread()
         if (control_state_ == ControlState::DRAINING) {
           control_state_ = ControlState::PAUSING;
           Enqueue(std::make_unique<TimewheelControlTask>(
-                    TimewheelControlTask::Kind::PAUSE_MASTER, *this),
+                    TimewheelControlTask::Kind::PAUSE_MASTER, this),
                   0 /* time-step */, entry_allocator);
           control_cv_.notify_all();
         }
