@@ -132,8 +132,8 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
   if (worker_count_ == 0) {
     throw Exception("TaskTimewheelPool requires at least 1 worker");
   }
-  if (bucket_count_ <= 0) {
-    throw Exception("TaskTimewheelPool requires at least 1 time bucket");
+  if (bucket_count_ <= 1) {
+    throw Exception("TaskTimewheelPool requires at least 2 time buckets");
   }
 
   // Pause the pool at the start... Directly enqueue a PAUSE task for
