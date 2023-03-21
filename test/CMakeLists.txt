@@ -9,6 +9,8 @@ find_package(nlohmann_json 3.2.0 REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+set(TEST_SOURCE_DIR ${CMAKE_SOURCE_DIR}/test)
+
 #
 # JsonPreprocessor
 #
