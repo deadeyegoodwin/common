@@ -62,17 +62,28 @@ JsonPreprocessor::Process(json& j, size_t rec_count)
   }
 
   // If 'j' is an object that contains the 'preprocessor-template'
-  // element. Replace that object with a copy of the template. If
-  // 'merge' and/or 'overwrite' are also provided, then modify
-  // just-copied template to merge/overwrite that content on top of
-  // the copied template content.
+  // element, replace that object with a copy of the template and then
+  // recursively revisit the "new" 'j'.
   if (j.is_object() && j.contains("preprocessor-template")) {
+    for (auto& it : j.items()) {
+      if ((it.key() != "preprocessor-template") &&
+          (it.key() != "merge") && (it.key() != "overwrite")) {
+        throw common::Exception(
+          std::string("preprocessor object can only contain 'preprocessor-template', ") +
+          "'merge', and 'overwrite' members, found '" + it.key() + "'");
+      }
+    }
+
     const std::string& template_name = j["preprocessor-template"];
     if (templates_.find(template_name) == templates_.end()) {
       throw common::Exception("unknown template '" + template_name + "'");
     }
 
     json jnew(templates_[template_name]);
+    Process(jnew, rec_count - 1);
+
+    // 'jnew' now has the completely preprocessed version of
+    // 'j'. Apply "merge" and "overwrite" if present.
     if (j.contains("overwrite")) {
       jnew.update(j["overwrite"], false /* merge_objects */);
     }
@@ -81,15 +92,10 @@ JsonPreprocessor::Process(json& j, size_t rec_count)
     }
 
     j.swap(jnew);
-
-    // The merge or overwrite could have introduced a new template
-    // into 'j', so must process it again.
-    Process(j, rec_count - 1);
   }
 
-  // If 'j' is an object (including a just copied template) then need
-  // to visit it to expand any contained preprocessor
-  // templates.
+  // If 'j' is an object (already preprocessed because of above), then
+  // visit each member and process any preprocessing.
   if (j.is_object()) {
     for (auto& it : j.items()) {
       Process(it.value(), rec_count);

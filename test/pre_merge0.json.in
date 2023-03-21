@@ -22,8 +22,7 @@
         "t1_b" : {
           "t1_b_a" : "nested"
         }
-      },
-      "other-stuff-that-will-be-lost" : "stuff"
+      }
     }
   }
 }

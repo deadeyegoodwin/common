@@ -3,8 +3,7 @@
     "tnext" : {
       "tn_a" : 3.14,
       "tn_b" : {
-        "preprocessor-template" : "t1",
-        "other-stuff-that-will-be-lost" : "stuff"
+        "preprocessor-template" : "t1"
       },
       "tn_c" : {
         "preprocessor-template" : "t0",
@@ -16,8 +15,7 @@
             }
           },
           "other" : true
-        },
-        "other-stuff-that-will-be-lost" : "stuff"
+        }
       }
     },
     "t0" : {
@@ -34,8 +32,7 @@
       "tb_a" : 123
     },
     "b2" : {
-      "preprocessor-template" : "tnext",
-      "other-stuff-that-will-be-lost" : "stuff"
+      "preprocessor-template" : "tnext"
     }
   }
 }

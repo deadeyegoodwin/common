@@ -19,8 +19,7 @@
         "t1_b" : {
           "t1_b_a" : "nested"
         }
-      },
-      "other-stuff-that-will-be-lost" : "stuff"
+      }
     },
     "b3" : {
       "b3_0" : 456,
@@ -28,8 +27,7 @@
         "preprocessor-template" : "t0",
         "overwrite" : {
           "t0_c" : 3
-        },
-        "other-stuff-that-will-be-lost" : "stuff2"
+        }
       }
     }
   }

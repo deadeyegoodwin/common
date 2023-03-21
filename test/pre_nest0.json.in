@@ -14,8 +14,7 @@
       "tb_a" : 123
     },
     "b2" : {
-      "preprocessor-template" : "t1",
-      "other-stuff-that-will-be-lost" : "stuff"
+      "preprocessor-template" : "t1"
     }
   }
 }

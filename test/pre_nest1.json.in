@@ -14,14 +14,12 @@
       "tb_a" : 123
     },
     "b2" : {
-      "preprocessor-template" : "t1",
-      "other-stuff-that-will-be-lost" : "stuff"
+      "preprocessor-template" : "t1"
     },
     "b3" : {
       "b3_0" : 456,
       "bnest" : {
-        "preprocessor-template" : "t0",
-        "other-stuff-that-will-be-lost" : "stuff2"
+        "preprocessor-template" : "t0"
       }
     }
   }

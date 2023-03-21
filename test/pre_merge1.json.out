@@ -1,0 +1,31 @@
+{
+  "spawn" : {
+    "kind" : "spawn",
+    "origin" : "ESD",
+    "ui" : {
+      "curses" : {
+        "alive" : {
+          "texture" : "+"
+        }
+      }
+    },
+    "bhac" : {
+      "kind" : "bhac",
+      "origin" : "WSD",
+      "interpreter" : {
+        "iteration-count" : 999,
+        "append-exec-to-code" : true,
+        "run-limit" : 100
+      },
+      "ui" : {
+        "curses" : {
+          "alive" : {
+            "texture" : "B",
+            "foreground-color" : "blue",
+            "background-color" : "black"
+          }
+        }
+      }
+    }
+  }
+}

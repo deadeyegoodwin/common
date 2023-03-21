@@ -1,0 +1,59 @@
+{
+  "preprocessor-templates" : {
+    "bhac" : {
+      "kind" : "bhac",
+      "origin" : "WSD",
+      "interpreter" : {
+        "iteration-count" : 100,
+        "append-exec-to-code" : true,
+        "run-limit" : 100
+      },
+      "ui" : {
+        "curses" : {
+          "alive" : {
+            "texture" : "B",
+            "foreground-color" : "red",
+            "background-color" : "black"
+          }
+        }
+      }
+    },
+    "spawn" : {
+      "kind" : "spawn",
+      "ui" : {
+        "curses" : {
+          "alive" : {
+            "texture" : "+"
+          }
+        }
+      },
+      "bhac" : {
+        "preprocessor-template" : "bhac",
+        "merge" : {
+          "interpreter" : {
+            "iteration-count" : 999
+          }
+        }
+      }
+    }
+  },
+  "body" : {
+    "spawn" : {
+      "preprocessor-template" : "spawn",
+      "merge" : {
+        "origin" : "ESD",
+        "bhac" : {
+          "ui" : {
+            "curses" : {
+              "alive" : {
+                "texture" : "B",
+                "foreground-color" : "blue",
+                "background-color" : "black"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
