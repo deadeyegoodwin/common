@@ -19,7 +19,7 @@ class TaskTimewheelWorkerExitException : public std::exception {};
 //
 class TimewheelControlTask : public TaskTimewheelPool::Task {
 public:
-  enum class Kind { PAUSE_MASTER, PAUSE, UNPAUSE, STOP_MASTER, STOP };
+  enum class Kind { PAUSE_MASTER, PAUSE, STOP_MASTER, STOP };
 
   TimewheelControlTask(Kind kind, TaskTimewheelPool* pool) :
     TaskTimewheelPool::Task(pool), kind_(kind) { }
@@ -33,7 +33,6 @@ public:
       // threads in the "next" barrier and others that
       // pause... resulting in a hang).
     case Kind::PAUSE_MASTER:
-      pool_->worker_pause_cnt_ = pool_->worker_count_;
       for (size_t w = 0; w < pool_->worker_count_; ++w) {
         Enqueue(std::make_unique<TimewheelControlTask>(
                   TimewheelControlTask::Kind::PAUSE, pool_),
@@ -43,46 +42,31 @@ public:
 
       // Pause this thread if in PAUSING state. Once all worker
       // threads are paused, change to PAUSED state. This is the only
-      // place where PAUSING->PAUSE, and from the PAUSING state the
+      // place where PAUSING->PAUSED, and from the PAUSING state the
       // only other possible transition is to STOPPING.
     case Kind::PAUSE: {
       std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
-      if (pool_->control_state_ == TaskTimewheelPool::ControlState::PAUSING) {
-        if (--pool_->worker_pause_cnt_ == 0) {
-          pool_->control_state_ = TaskTimewheelPool::ControlState::PAUSED;
-          pool_->control_cv_.notify_all();
-        }
-        pool_->control_cv_.wait(control_lk, [this]() -> bool {
-          return ((pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSING) &&
-                  (pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSED)); });
-      }
-      else if (pool_->control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
+      if (pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSING) {
         throw common::Exception(
           "TaskTimewheelPool worker encountered unexpected PAUSE state: " +
           TaskTimewheelPool::ControlStateToName(pool_->control_state_));
       }
-    } break;
 
-      // Unpause this thread if in UNPAUSING state. Once all worker
-      // threads are unpaused, change to RUNNING state. This is the
-      // only place where UNPAUSING->RUNNING, and from the UNPAUSING
-      // state the only other possible transition is to STOPPING.
-    case Kind::UNPAUSE: {
-      std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
-      if (pool_->control_state_ == TaskTimewheelPool::ControlState::UNPAUSING) {
-        if (--pool_->worker_unpause_cnt_ == 0) {
-          pool_->control_state_ = TaskTimewheelPool::ControlState::RUNNING;
-          pool_->control_cv_.notify_all();
-        } else {
-          pool_->control_cv_.wait(control_lk, [this]() -> bool {
-            return pool_->control_state_ != TaskTimewheelPool::ControlState::UNPAUSING; });
-        }
-      }
-      else if (pool_->control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
-        throw common::Exception(
-          "TaskTimewheelPool worker encountered unexpected UNPAUSE state: " +
-          TaskTimewheelPool::ControlStateToName(pool_->control_state_));
-      }
+      pool_->pause_barrier_.Wait(
+        [&](size_t count) { control_lk.unlock(); },
+        [&](size_t count) {
+          control_lk.lock();
+          if (count == 0) {
+            pool_->control_state_ = TaskTimewheelPool::ControlState::PAUSED;
+            pool_->control_cv_.notify_all();
+          }});
+
+      // Wait for non-PAUSED state. We are sure that all threads
+      // will leave the below cv because once PAUSED state is exited
+      // the only way to enter it again is by participation of all
+      // threads in the above barrier.
+      pool_->control_cv_.wait(control_lk, [this]() -> bool {
+        return pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSED; });
     } break;
 
       // Enqueue one STOP task for each worker thread in the next
@@ -91,7 +75,6 @@ public:
       // see the STOP (if we don't do it this way there could be some
       // threads stuck in the "next" barrier).
     case Kind::STOP_MASTER:
-      pool_->worker_stop_cnt_ = pool_->worker_count_;
       for (size_t w = 0; w < pool_->worker_count_; ++w) {
         Enqueue(std::make_unique<TimewheelControlTask>(
                   TimewheelControlTask::Kind::STOP, pool_),
@@ -105,12 +88,20 @@ public:
     case Kind::STOP: {
       std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
       if (pool_->control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
-        throw common::Exception("TaskTimewheelPool worker expected STOPPING state");
+        throw common::Exception(
+          "TaskTimewheelPool worker encountered unexpected STOP state: " +
+          TaskTimewheelPool::ControlStateToName(pool_->control_state_));
       }
-      if (--pool_->worker_stop_cnt_ == 0) {
-        pool_->control_state_ = TaskTimewheelPool::ControlState::STOPPED;
-        pool_->control_cv_.notify_all();
-      }
+
+      pool_->stop_barrier_.Wait(
+        [&](size_t count) { control_lk.unlock(); },
+        [&](size_t count) {
+          control_lk.lock();
+          if (count == 0) {
+            pool_->control_state_ = TaskTimewheelPool::ControlState::STOPPED;
+            pool_->control_cv_.notify_all();
+          }});
+
       throw TaskTimewheelWorkerExitException();
     } break;
     }
@@ -126,6 +117,7 @@ private:
 //
 TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t bucket_count) :
   control_state_(ControlState::RUNNING), worker_count_(worker_count),
+  pause_barrier_(worker_count), stop_barrier_(worker_count),
   bucket_count_(bucket_count), time_buckets_(bucket_count),
   next_barrier_(CK_BARRIER_CENTRALIZED_INITIALIZER), in_flight_task_count_(0)
 {
@@ -140,7 +132,6 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
   // each worker so that the first task executed by each worker is a
   // PAUSE.
   control_state_ = ControlState::PAUSING;
-  worker_pause_cnt_ = worker_count_;
   for (size_t w = 0; w < worker_count_; ++w) {
     Enqueue(std::make_unique<TimewheelControlTask>(
               TimewheelControlTask::Kind::PAUSE, this),
@@ -164,6 +155,11 @@ TaskTimewheelPool::Stop()
   {
     std::unique_lock<std::mutex> control_lk(control_mu_);
 
+    // Pausing is a transient state that we must wait to complete before
+    // attempting to transition to running state.
+    control_cv_.wait(control_lk, [this]() -> bool {
+      return control_state_ != ControlState::PAUSING; });
+
     switch (control_state_) {
     case ControlState::STOPPED:
       return true;
@@ -172,7 +168,6 @@ TaskTimewheelPool::Stop()
       // to wait for completion of stop.
     case ControlState::DRAINING:
     case ControlState::PAUSING:
-    case ControlState::UNPAUSING:
     case ControlState::PAUSED:
     case ControlState::RUNNING:
       control_state_ = ControlState::STOPPING;
@@ -212,8 +207,7 @@ TaskTimewheelPool::Drain()
   // Before attempting to enter DRAINING state, we must first
   // transition out of any pause into the RUNNING state.
   while ((control_state_ == ControlState::PAUSED) ||
-         (control_state_ == ControlState::PAUSING) ||
-         (control_state_ == ControlState::UNPAUSING)) {
+         (control_state_ == ControlState::PAUSING)) {
     if (control_state_ == ControlState::PAUSED) {
       control_lk.unlock();
       if (!Run()) {
@@ -222,8 +216,7 @@ TaskTimewheelPool::Drain()
       control_lk.lock();
     } else {
       control_cv_.wait(control_lk, [this]() -> bool {
-        return((control_state_ != ControlState::PAUSING) &&
-               (control_state_ != ControlState::UNPAUSING)); });
+        return(control_state_ != ControlState::PAUSING); });
     }
   }
 
@@ -234,9 +227,8 @@ TaskTimewheelPool::Drain()
 
   case ControlState::PAUSED:
   case ControlState::PAUSING:
-  case ControlState::UNPAUSING:
     throw common::Exception(
-      "unexpected PAUSED/PAUSING/UNPAUSING state in TaskTimewheelPool::Drain()");
+      "unexpected PAUSED/PAUSING state in TaskTimewheelPool::Drain()");
     return false;
 
     // If running, enter DRAINING state and fall-through to wait for
@@ -261,25 +253,22 @@ TaskTimewheelPool::Pause(bool block)
 {
   std::unique_lock<std::mutex> control_lk(control_mu_);
 
-  // Pausing and unpausing are transient states that we must wait to
-  // complete before attempting to transition to pause state.
-  control_cv_.wait(control_lk, [this]() -> bool {
-    return((control_state_ != ControlState::PAUSING) &&
-           (control_state_ != ControlState::UNPAUSING)); });
-
   switch (control_state_) {
   case ControlState::STOPPING:
   case ControlState::STOPPED:
     return false;
 
   case ControlState::PAUSED:
-    return true;
+    break;
 
+    // Already in PAUSING state, just wait for pause to complete
+    // (unless not blocking).
   case ControlState::PAUSING:
-  case ControlState::UNPAUSING:
-    throw common::Exception(
-      "unexpected PAUSING/UNPAUSING state in TaskTimewheelPool::Pause()");
-    return false;
+    if (block) {
+      control_cv_.wait(control_lk, [this]() -> bool {
+        return control_state_ != ControlState::PAUSING; });
+    }
+    break;
 
     // If not already PAUSING, enter PAUSING state and wait for
     // completion of pause (if blocking).
@@ -305,11 +294,10 @@ TaskTimewheelPool::Run()
 {
   std::unique_lock<std::mutex> control_lk(control_mu_);
 
-  // Pausing and unpausing are transient states that we must wait to
-  // complete before attempting to transition to running state.
+  // Pausing is a transient state that we must wait to complete before
+  // attempting to transition to running state.
   control_cv_.wait(control_lk, [this]() -> bool {
-    return((control_state_ != ControlState::PAUSING) &&
-           (control_state_ != ControlState::UNPAUSING)); });
+    return control_state_ != ControlState::PAUSING; });
 
   switch (control_state_) {
   case ControlState::STOPPING:
@@ -317,35 +305,17 @@ TaskTimewheelPool::Run()
     return false;
 
   case ControlState::PAUSING:
-  case ControlState::UNPAUSING:
     throw common::Exception(
-      "unexpected PAUSING/UNPAUSING state in TaskTimewheelPool::Run()");
+      "unexpected PAUSING state in TaskTimewheelPool::Run()");
     return false;
 
   case ControlState::RUNNING:
-    return true;
+    break;
 
-    // If draining enter RUNNING state.
+  case ControlState::PAUSED:
   case ControlState::DRAINING:
     control_state_ = ControlState::RUNNING;
     control_cv_.notify_all();
-    break;
-
-    // If PAUSED, enter UNPAUSING state and wait for completion. To
-    // enter UNPAUSE state we don't need to use a "master"
-    // TimewheelControlTask::Kind because we are in the PAUSED state
-    // and so all pool threads are known to be at the same time-step.
-  case ControlState::PAUSED:
-    control_state_ = ControlState::UNPAUSING;
-    worker_unpause_cnt_ = worker_count_;
-    for (size_t w = 0; w < worker_count_; ++w) {
-      Enqueue(std::make_unique<TimewheelControlTask>(
-                TimewheelControlTask::Kind::UNPAUSE, this),
-              0 /* time-step */, default_allocator_);
-    }
-    control_cv_.notify_all();
-    control_cv_.wait(control_lk, [this]() -> bool {
-      return control_state_ != ControlState::UNPAUSING; });
     break;
   }
 
@@ -370,10 +340,6 @@ TaskTimewheelPool::ControlStateToName(const ControlState state)
   }
   case ControlState::PAUSING: {
     static const std::string pausing("PAUSING");
-    return pausing;
-  }
-  case ControlState::UNPAUSING: {
-    static const std::string pausing("UNPAUSING");
     return pausing;
   }
   case ControlState::PAUSED: {

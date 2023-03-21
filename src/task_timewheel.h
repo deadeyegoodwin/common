@@ -6,6 +6,7 @@
 #include <mutex>
 #include <thread>
 #include <vector>
+#include "barrier.h"
 #include "error.h"
 #include "lockless_queue.h"
 
@@ -124,7 +125,7 @@ public:
 
   // Run/unpause the pool. Function returns when all pool threads have
   // commenced processing tasks. Returns false if pool is in a state
-  // that does not allowing pausing. Calling this function from
+  // that does not allowing running. Calling this function from
   // Task::Invoke is unsupported and causes undefined behavior.
   bool Run();
 
@@ -145,7 +146,7 @@ private:
   friend class TimewheelControlTask;
 
   enum class ControlState {
-    RUNNING, DRAINING, UNPAUSING, PAUSING, PAUSED, STOPPING, STOPPED };
+    RUNNING, DRAINING, PAUSING, PAUSED, STOPPING, STOPPED };
   static const std::string& ControlStateToName(const ControlState state);
 
   void WorkerThread();
@@ -158,9 +159,8 @@ private:
 
   const size_t worker_count_;
   std::vector<std::thread> work_threads_;
-  size_t worker_pause_cnt_;
-  size_t worker_unpause_cnt_;
-  size_t worker_stop_cnt_;
+  Barrier pause_barrier_;
+  Barrier stop_barrier_;
 
   const size_t bucket_count_;
   std::vector<LocklessMultiQueue<Task>> time_buckets_;
