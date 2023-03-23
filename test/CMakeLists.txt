@@ -69,6 +69,41 @@ endforeach()
 
 
 #
+# Time
+#
+add_executable(
+  time-test
+  time_test.cc
+)
+add_dependencies(common-test time-test)
+
+target_compile_features(time-test PRIVATE cxx_std_17)
+target_compile_options(
+  time-test
+  PRIVATE
+    -Wall -Wextra -Werror -Wno-unused-parameter
+    ${COMMON_ASAN_FLAGS}
+)
+
+set_target_properties(
+  time-test
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME time_test
+)
+
+target_link_libraries(
+  time-test
+  PRIVATE
+    nlohmann_json::nlohmann_json
+    ${COMMON_ASAN_FLAGS}
+    common-library
+)
+
+add_test(NAME time-test COMMAND time_test)
+
+
+#
 # TaskTimewheelPool
 #
 add_executable(
