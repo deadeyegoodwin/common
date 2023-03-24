@@ -1,6 +1,7 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -9,10 +10,6 @@
 #include "barrier.h"
 #include "error.h"
 #include "lockless_queue.h"
-
-extern "C" {
-#include "ck_barrier.h"
-}
 
 namespace common {
 
@@ -31,13 +28,13 @@ namespace common {
 // that ownership is clearly passed to the pool. The task must derive
 // from class TaskTimewheelPool::Task.
 //
-// TaskTimewheelPool::Task::Invoke() is called with time_step = time
-// N. If Invoke() returns true, indicating that the task has taken
-// ownership of its own Task object, then TaskTimewheelPool does not
-// perform any futher action on that task. If Invoke() returns false
-// then TaskTimewheelPool retains ownership of the task, however,
-// because TaskTimewheelPool has no futher use for the task, it will
-// simply delete it.
+// TaskTimewheelPool::Task::Invoke() is called to execute each Task
+// during the appropriate time-step. If Invoke() returns true,
+// indicating that the task has taken ownership of its own Task
+// object, then TaskTimewheelPool does not perform any futher action
+// on that task. If Invoke() returns false then TaskTimewheelPool
+// retains ownership of the task, however, because TaskTimewheelPool
+// has no futher use for the task, it will simply delete it.
 //
 class TaskTimewheelPool {
 public:
@@ -52,10 +49,10 @@ public:
 
     // Invoke task and transfer ownership of the task to the Invoke()
     // function. 'time_step' passes the time-step for the task
-    // invocation. Invoke() must return true to indicate that it is
+    // invocation. Invoke() should return true to indicate that it is
     // retaining ownership of the task object, and return false to
     // indicate that it is returning ownership of the task object to
-    // the caller. 'allocator' is the LocklessMultiQueue allocator to
+    // the pool. 'allocator' is the LocklessMultiQueue allocator to
     // use when calling Task::Enqueue() from within this Invoke()
     // exection.
     virtual bool Invoke(
@@ -82,8 +79,8 @@ public:
   private:
     friend class TaskTimewheelPool;
 
-    // Used to manage the scheduling of tasks farther in the future
-    // than the number of time buckets.
+    // Used by pool to manage the scheduling of tasks farther in the
+    // future than the number of time buckets.
     size_t remaining_time_steps_;
   };
 
@@ -95,11 +92,12 @@ public:
   // and destroyed.
   ~TaskTimewheelPool();
 
-  // Stop the pool so that any pending or future tasks will not be
-  // invoked. Once stopped the pool cannot be restarted. Function
-  // returns when pool is stopped. Returns false if pool is in a state
-  // that does not allowing stopping. Calling this function from
-  // Task::Invoke is unsupported and causes undefined behavior.
+  // Stop the pool after the current time-step completes. Any tasks
+  // beyond the current time-step will not be invoked. Once stopped
+  // the pool cannot be restarted. Function returns when pool is
+  // stopped. Returns false if pool is in a state that does not
+  // allowing stopping. Calling this function from Task::Invoke is
+  // unsupported and causes undefined behavior.
   bool Stop();
 
   // Drain all in-flight tasks from the pool. Function returns when
@@ -107,20 +105,20 @@ public:
   // Pause(), Run() or Stop(). Calling Drain() does not prevent
   // additional tasks from being enqueued, and thus becoming
   // additional in-flight tasks that Drain() will wait on. Returns
-  // false if pool is in a state that does not allowing draining.
+  // false if pool is in a state that does not allow draining.
   // Calling this function from Task::Invoke is unsupported and causes
   // undefined behavior.
   bool Drain();
 
-  // Pause pool so that it does not process any tasks once it
-  // completes the tasks in the current time-step. If 'block' is true,
-  // function returns when pool is paused or when another thread calls
-  // Run() or Stop(). If 'bloc' is false function returns
-  // immediately. Calling Pause() does not prevent additional tasks
-  // from being enqueued. Returns false if pool is in a state that
-  // does not allowing pausing. Calling this function from
-  // Task::Invoke is supported for 'block' == true, calling with
-  // 'block' == false is unsupported and causes undefined behavior.
+  // Pause pool after it completes invocation of all tasks in the
+  // current time-step. If 'block' is true, function returns when pool
+  // is paused or when another thread calls Run(), Drain() or
+  // Stop(). If 'block' is false function returns immediately. Calling
+  // Pause() does not prevent additional tasks from being
+  // enqueued. Returns false if pool is in a state that does not
+  // allowing pausing. Calling this function from Task::Invoke is
+  // supported for 'block' == false, calling with 'block' == true is
+  // unsupported and causes undefined behavior (likely deadlock).
   bool Pause(bool block = true);
 
   // Run/unpause the pool. Function returns when all pool threads have
@@ -150,12 +148,22 @@ private:
   static const std::string& ControlStateToName(const ControlState state);
 
   void WorkerThread();
+  bool HandleControl();
 
   LocklessMultiQueueAllocator default_allocator_;
 
   std::mutex control_mu_;
   std::condition_variable control_cv_;
   ControlState control_state_;
+
+  // Any thread (worker or non-worker) can set
+  // 'control_state_needs_handle_' to true to cause the worker threads
+  // to check and handle 'control_state_' after the next time-step
+  // barrier. 'next_time_step_handle_control_' is used internally by
+  // the worker threads to make sure that all worker threads handle
+  // the control state together.
+  std::atomic<bool> control_state_needs_handle_;
+  std::atomic<bool> next_time_step_handle_control_;
 
   const size_t worker_count_;
   std::vector<std::thread> work_threads_;
@@ -166,8 +174,9 @@ private:
   std::vector<LocklessMultiQueue<Task>> time_buckets_;
 
   LocklessMultiQueue<Task> input_queue_ CK_CC_CACHELINE;
-  ck_barrier_centralized_t next_barrier_ CK_CC_CACHELINE;
   uint32_t in_flight_task_count_ CK_CC_CACHELINE;
+
+  Barrier next_time_step_barrier_; // FIXME lockless barrier
 };
 
 } // namespace common

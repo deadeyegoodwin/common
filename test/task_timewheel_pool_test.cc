@@ -47,14 +47,14 @@ public:
     name_(name), vec_(vec), id_(id) { }
 
   bool Invoke(uint64_t time_step, common::LocklessMultiQueueAllocator& allocator) {
-    static std::mutex mu;
-    std::lock_guard<std::mutex> lk(mu);
+    std::lock_guard<std::mutex> lk(mu_);
     vec_.push_back(id_);
     return false; // return ownership
   }
 
 private:
   const std::string name_;
+  std::mutex mu_;
   std::vector<int32_t>& vec_;
   const int32_t id_;
 };
@@ -175,7 +175,7 @@ main(int argc, char **argv)
       // When we enqueue while running, draining outcome is
       // unpredictable because of the timing between when some running
       // thread detects no pending tasks, when tasks are enqueued, and
-      // when drain is requested. So we must keep training until all
+      // when drain is requested. So we must keep draining until all
       // tasks are complete.
       while (test_atomic != task_cnt) {
         pool.Drain();
@@ -199,7 +199,7 @@ main(int argc, char **argv)
       // When we enqueue while running, draining outcome is
       // unpredictable because of the timing between when some running
       // thread detects no pending tasks, when tasks are enqueued, and
-      // when drain is requested. So we must keep training until all
+      // when drain is requested. So we must keep draining until all
       // tasks are complete.
       while (test_atomic != task_cnt) {
         pool.Drain();
@@ -257,6 +257,12 @@ main(int argc, char **argv)
       common::TaskTimewheelPool pool(worker_cnt, time_bucket_cnt);
       common::LocklessMultiQueueAllocator allocator;
 
+      // The ordering of each 'delay-list' requires that tasks be
+      // enqueued while pool is paused. For the first iteration pool
+      // is paused because it was just created. For subsequent
+      // iteration pool is paused because of the Drain. If initial
+      // creation or drain does not actually pause the pool, then
+      // there will be intermittent ordering issues in the test.
       for (const auto& delays : delay_list) {
         std::vector<int32_t> vec;
         for (const auto& pr : delays) {
@@ -264,17 +270,17 @@ main(int argc, char **argv)
             std::to_string(pr.first), vec, pr.first);
           pool.Enqueue(std::move(task), pr.second, allocator);
         }
+
         pool.Drain();
 
         bool fail = (vec.size() != delays.size());
-        if (!fail) {
-          for (size_t i = 0; i < delays.size(); ++i) {
-            if (vec[i] != (int32_t)i) {
-              fail = true;
-              break;
-            }
+        for (size_t i = 0; i < delays.size(); ++i) {
+          if (vec[i] != (int32_t)i) {
+            fail = true;
+            break;
           }
         }
+
         if (fail) {
           std::cerr << "test " << test_number << ": " << std::endl;
           std::cerr << "  expected: ";

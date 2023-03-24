@@ -4,122 +4,11 @@
 
 namespace common {
 
-//
-// TaskTimewheelWorkerExitException
-//
-// Custom exception to allow workers to exit from with Task::Invoke.
-//
-class TaskTimewheelWorkerExitException : public std::exception {};
-
-//
-// TimewheelControlTask
-//
-// Task responsible handling changes in the control state of a
-// TaskTimewheelPool.
-//
-class TimewheelControlTask : public TaskTimewheelPool::Task {
-public:
-  enum class Kind { PAUSE_MASTER, PAUSE, STOP_MASTER, STOP };
-
-  TimewheelControlTask(Kind kind, TaskTimewheelPool* pool) :
-    TaskTimewheelPool::Task(pool), kind_(kind) { }
-
-  bool Invoke(uint64_t time_step, LocklessMultiQueueAllocator& allocator) override {
-    switch (kind_) {
-      // Enqueue one PAUSE task for each worker thread in the next
-      // time-step. We need to do this enqueue from a worker thread to
-      // ensure that all threads are active in the time-step when they
-      // see the PAUSE (if we don't do it this way there could be some
-      // threads in the "next" barrier and others that
-      // pause... resulting in a hang).
-    case Kind::PAUSE_MASTER:
-      for (size_t w = 0; w < pool_->worker_count_; ++w) {
-        Enqueue(std::make_unique<TimewheelControlTask>(
-                  TimewheelControlTask::Kind::PAUSE, pool_),
-                1 /* time_delta */, allocator);
-      }
-      break;
-
-      // Pause this thread if in PAUSING state. Once all worker
-      // threads are paused, change to PAUSED state. This is the only
-      // place where PAUSING->PAUSED, and from the PAUSING state the
-      // only other possible transition is to STOPPING.
-    case Kind::PAUSE: {
-      std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
-      if (pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSING) {
-        throw common::Exception(
-          "TaskTimewheelPool worker encountered unexpected PAUSE state: " +
-          TaskTimewheelPool::ControlStateToName(pool_->control_state_));
-      }
-
-      pool_->pause_barrier_.Wait(
-        [&](size_t count) { control_lk.unlock(); },
-        [&](size_t count) {
-          control_lk.lock();
-          if (count == 0) {
-            pool_->control_state_ = TaskTimewheelPool::ControlState::PAUSED;
-            pool_->control_cv_.notify_all();
-          }});
-
-      // Wait for non-PAUSED state. We are sure that all threads
-      // will leave the below cv because once PAUSED state is exited
-      // the only way to enter it again is by participation of all
-      // threads in the above barrier.
-      pool_->control_cv_.wait(control_lk, [this]() -> bool {
-        return pool_->control_state_ != TaskTimewheelPool::ControlState::PAUSED; });
-    } break;
-
-      // Enqueue one STOP task for each worker thread in the next
-      // time-step. We need to do this enqueue from a worker thread to
-      // ensure that all threads are active in the time-step when they
-      // see the STOP (if we don't do it this way there could be some
-      // threads stuck in the "next" barrier).
-    case Kind::STOP_MASTER:
-      for (size_t w = 0; w < pool_->worker_count_; ++w) {
-        Enqueue(std::make_unique<TimewheelControlTask>(
-                  TimewheelControlTask::Kind::STOP, pool_),
-                1 /* time_delta */, allocator);
-      }
-      break;
-
-      // Exit this thread. The last work worker thread to exit changes
-      // state to STOPPED. This is the only place where
-      // STOPPING->STOPPED.
-    case Kind::STOP: {
-      std::unique_lock<std::mutex> control_lk(pool_->control_mu_);
-      if (pool_->control_state_ != TaskTimewheelPool::ControlState::STOPPING) {
-        throw common::Exception(
-          "TaskTimewheelPool worker encountered unexpected STOP state: " +
-          TaskTimewheelPool::ControlStateToName(pool_->control_state_));
-      }
-
-      pool_->stop_barrier_.Wait(
-        [&](size_t count) { control_lk.unlock(); },
-        [&](size_t count) {
-          control_lk.lock();
-          if (count == 0) {
-            pool_->control_state_ = TaskTimewheelPool::ControlState::STOPPED;
-            pool_->control_cv_.notify_all();
-          }});
-
-      throw TaskTimewheelWorkerExitException();
-    } break;
-    }
-
-    return false;
-  }
-
-private:
-  Kind kind_;
-};
-
-//
-//
 TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t bucket_count) :
-  control_state_(ControlState::RUNNING), worker_count_(worker_count),
-  pause_barrier_(worker_count), stop_barrier_(worker_count),
+  worker_count_(worker_count), pause_barrier_(worker_count), stop_barrier_(worker_count),
   bucket_count_(bucket_count), time_buckets_(bucket_count),
-  next_barrier_(CK_BARRIER_CENTRALIZED_INITIALIZER), in_flight_task_count_(0)
+  in_flight_task_count_(0), next_time_step_barrier_(worker_count)
+
 {
   if (worker_count_ == 0) {
     throw Exception("TaskTimewheelPool requires at least 1 worker");
@@ -128,15 +17,10 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
     throw Exception("TaskTimewheelPool requires at least 2 time buckets");
   }
 
-  // Pause the pool at the start... Directly enqueue a PAUSE task for
-  // each worker so that the first task executed by each worker is a
-  // PAUSE.
+  // Pause the pool at the start...
   control_state_ = ControlState::PAUSING;
-  for (size_t w = 0; w < worker_count_; ++w) {
-    Enqueue(std::make_unique<TimewheelControlTask>(
-              TimewheelControlTask::Kind::PAUSE, this),
-            0 /* time_delta */, default_allocator_);
-  }
+  control_state_needs_handle_ = false;
+  next_time_step_handle_control_ = false;
 
   work_threads_.reserve(worker_count_);
   for (size_t i = 0; i < worker_count_; ++i) {
@@ -164,16 +48,18 @@ TaskTimewheelPool::Stop()
     case ControlState::STOPPED:
       return true;
 
+    case ControlState::PAUSING:
+      throw common::Exception(
+        "unexpected PAUSING state in TaskTimewheelPool::Stop()");
+      return false;
+
       // If not already STOPPING, enter STOPPING state and fall-through
       // to wait for completion of stop.
     case ControlState::DRAINING:
-    case ControlState::PAUSING:
     case ControlState::PAUSED:
     case ControlState::RUNNING:
       control_state_ = ControlState::STOPPING;
-      Enqueue(std::make_unique<TimewheelControlTask>(
-                TimewheelControlTask::Kind::STOP_MASTER, this),
-              0 /* time-step */, default_allocator_);
+      control_state_needs_handle_ = true;
       control_cv_.notify_all();
       // fall-through
 
@@ -238,10 +124,12 @@ TaskTimewheelPool::Drain()
     control_cv_.notify_all();
     // fall-through
 
-    // If already draining, wait for drain completion.
+    // If already draining, wait for drain (and the subsequent
+    // pausing) to complete.
   case ControlState::DRAINING:
     control_cv_.wait(control_lk, [this]() -> bool {
-      return control_state_ != ControlState::DRAINING; });
+      return((control_state_ != ControlState::DRAINING) &&
+             (control_state_ != ControlState::PAUSING)); });
     break;
   }
 
@@ -275,9 +163,7 @@ TaskTimewheelPool::Pause(bool block)
   case ControlState::DRAINING:
   case ControlState::RUNNING:
     control_state_ = ControlState::PAUSING;
-    Enqueue(std::make_unique<TimewheelControlTask>(
-              TimewheelControlTask::Kind::PAUSE_MASTER, this),
-              0 /* time-step */, default_allocator_);
+    control_state_needs_handle_ = true;
     control_cv_.notify_all();
     if (block) {
       control_cv_.wait(control_lk, [this]() -> bool {
@@ -379,12 +265,15 @@ TaskTimewheelPool::WorkerThread()
   // Increments for every time-step.
   uint64_t generation_idx = 0;
 
-  ck_barrier_centralized_state_t next_barrier_state = CK_BARRIER_CENTRALIZED_STATE_INITIALIZER;
+  // Index into the time buckets, wraps...
   size_t bucket_idx = 0;
 
   // Use a lockless allocator for this thread. Lock is not needed
   // because this thread is the only user of this allocator.
   LocklessMultiQueuePoolAllocator entry_allocator;
+
+  // Pause the pool at the start...
+  HandleControl();
 
   // The "work loop" for each thread. Thread first tries queue for the
   // current bucket, if that is empty it then process input_queue_ to
@@ -413,26 +302,12 @@ TaskTimewheelPool::WorkerThread()
       }
       // ... otherwise invoke the task.
       else {
-        bool exit_worker = false;
-        bool rtask_owner = false;
         Task* rtask = task.release();
-        try {
-          rtask_owner = !rtask->Invoke(generation_idx, entry_allocator);
-        }
-        catch (const TaskTimewheelWorkerExitException&) {
-          exit_worker = true;
-          rtask_owner = true;
-        }
-
-        if (rtask_owner) {
+        if (!rtask->Invoke(generation_idx, entry_allocator)) {
           delete rtask;
         }
 
         ck_pr_dec_32(&in_flight_task_count_);
-
-        if (exit_worker) {
-          break;
-        }
       }
     }
     // Input queue...
@@ -456,30 +331,97 @@ TaskTimewheelPool::WorkerThread()
       const size_t idx = (bucket_idx + time_delta) % bucket_count_;
       time_buckets_[idx].Enqueue(std::move(task), entry_allocator);
     }
-    // Next barrier, synchronize threads so that they all receive any
-    // pending control signal and all move on to the next bucket
-    // together.
+    // Next barrier, synchronize threads so that they all move on to
+    // the next bucket together.
     else {
-      // If there are no in-flight tasks then check to see if pool is
-      // currently DRAINING. If it is then transition to the PAUSING
-      // state.
+      // If the pool is draining and there are no in-flight tasks,
+      // then transition to the PAUSING state.
       if (ck_pr_load_32(&in_flight_task_count_) == 0) {
         std::unique_lock<std::mutex> control_lk(control_mu_);
         if (control_state_ == ControlState::DRAINING) {
           control_state_ = ControlState::PAUSING;
-          Enqueue(std::make_unique<TimewheelControlTask>(
-                    TimewheelControlTask::Kind::PAUSE_MASTER, this),
-                  0 /* time-step */, entry_allocator);
+          control_state_needs_handle_ = true;
           control_cv_.notify_all();
         }
       }
 
-      ck_barrier_centralized(&next_barrier_, &next_barrier_state, worker_count_);
+      // Just before the last thread releases the barrier, check to
+      // see if there is any pending control command that needs to be
+      // handled. If so set 'next_time_step_handle_control_' so that
+      // all threads will see the pending control as they exit the
+      // barrer.
+      next_time_step_barrier_.Wait(
+        nullptr /* pre */,
+        [&](size_t count) { /* post */
+          if ((count == 0) && control_state_needs_handle_) {
+            control_state_needs_handle_ = false;
+            next_time_step_handle_control_ = true;
+          }});
+
+      if (next_time_step_handle_control_) {
+        if (!HandleControl()) {
+          break;
+        }
+      }
 
       generation_idx++;
       bucket_idx = (bucket_idx + 1) % bucket_count_;
     }
   }
+}
+
+bool
+TaskTimewheelPool::HandleControl()
+{
+  std::unique_lock<std::mutex> control_lk(control_mu_);
+
+  // Pause this thread if in PAUSING state. Once all worker threads
+  // are paused, change to PAUSED state. This is the only place where
+  // PAUSING->PAUSED, and from the PAUSING state there is no other
+  // possible transition.
+  if (control_state_ == ControlState::PAUSING) {
+    pause_barrier_.Wait(
+      [&](size_t count) { control_lk.unlock(); }, /* pre */
+      [&](size_t count) { /* post */
+        control_lk.lock();
+        if (count == 0) {
+          next_time_step_handle_control_ = false;
+          control_state_ = ControlState::PAUSED;
+          control_cv_.notify_all();
+        }});
+
+    // Wait for non-PAUSED state. We are sure that all threads will
+    // leave the below cv because once PAUSED state is exited the only
+    // way to enter it again is by participation of all threads in the
+    // above 'pause_barrier_'.
+    control_cv_.wait(control_lk, [this]() -> bool {
+      return control_state_ != ControlState::PAUSED; });
+
+    return true;
+  }
+
+  // Stop this thread if in STOPPING state. This is the only place
+  // where STOPPING->STOPPED, and from the STOPPING state there is no
+  // other possible transition.
+  if (control_state_ == ControlState::STOPPING) {
+    stop_barrier_.Wait(
+      [&](size_t count) { control_lk.unlock(); },
+      [&](size_t count) {
+        control_lk.lock();
+        if (count == 0) {
+          next_time_step_handle_control_ = false;
+          control_state_ = ControlState::STOPPED;
+          control_cv_.notify_all();
+        }});
+
+    return false;
+  }
+
+  throw common::Exception(
+    "TaskTimewheelPool worker encountered unexpected control state: " +
+    ControlStateToName(control_state_));
+
+  __builtin_unreachable();
 }
 
 } // namespace common

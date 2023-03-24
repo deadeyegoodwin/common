@@ -18,12 +18,12 @@ class Barrier {
   // Wait until 'cnt' threads have reached the barrier.
   //
   // 'pre' is a void(size_t) function that is called just before the
-  // thread enters the barrier.
+  // thread enters the barrier. May be nullptr.
   //
   // 'post' is a void(size_t) function that is called when the thread
   // exits the barrier. For the thread that releases the barrier
   // (count == 0), 'post' is called before the other threads are
-  // released.
+  // released. May be nullptr.
   //
   // Both are passed a size_t "count" argument that indicates how many
   // additional threads must reach the barrier after this one. Thus
@@ -36,18 +36,23 @@ class Barrier {
     const size_t tgen = generation_;
     const size_t tcount = count_ - 1;
 
-    pre(tcount);
+    if (pre != nullptr) {
+      pre(tcount);
+    }
 
     if (--count_ == 0) {
-      post(tcount);
+      if (post != nullptr) {
+        post(tcount);
+      }
       generation_++;
       count_ = threshold_;
       cv_.notify_all();
     } else {
       cv_.wait(lk, [this, tgen] { return tgen != generation_; });
-      post(tcount);
+      if (post != nullptr) {
+        post(tcount);
+      }
     }
-
   }
 
  private:
