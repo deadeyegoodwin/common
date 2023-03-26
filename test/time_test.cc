@@ -205,58 +205,40 @@ main(int argc, char **argv)
       }
     }
 
-    // NDeltas and NDeltasNext
+    // NDeltas
     {
       const std::string m_str("1m");
       common::Time m(m_str);
-      if (m.NDeltas(common::Time("1s")) != 60) {
+      if ((m.NDeltas(common::Time("1s")) != 60) || (m != common::Time("0s"))) {
         Fail("unexpected '" + m_str + "' NDeltas '" + "1s" + "' != 60");
       }
-      if ((m.NDeltasNext(common::Time("1s")) != 60) || (m != common::Time("0s"))) {
-        Fail("unexpected '" + m_str + "' NDeltasNext '" + "1s" + "' != 60");
-      }
 
       m = m_str;
-      if (m.NDeltas(common::Time("1h")) != 0) {
+      if ((m.NDeltas(common::Time("1h")) != 0) || (m != common::Time("1m"))) {
         Fail("unexpected '" + m_str + "' NDeltas '" + "1h" + "' != 0");
       }
-      if ((m.NDeltasNext(common::Time("1h")) != 0) || (m != common::Time("1m"))) {
-        Fail("unexpected '" + m_str + "' NDeltasNext '" + "1h" + "' != 0");
-      }
 
       m = m_str;
-      if (m.NDeltas(common::Time("25s")) != 2) {
-        Fail("unexpected '" + m_str + "' NDeltas '" + "25s" + "' != 2");
-      }
-      if ((m.NDeltasNext(common::Time("25s"), common::Time("3ms")) != 2) ||
-          (m != common::Time("10.003s"))) {
-        Fail("unexpected '" + m_str + "' NDeltasNext '" + "25s" + "' != 2");
+      if ((m.NDeltas(common::Time("29.999s"), common::Time("3ms")) != 2) ||
+          (m != common::Time("5ms"))) {
+        Fail("unexpected '" + m_str + "' NDeltas '" + "29.999s, 3ms" + "' != 2");
       }
 
       const std::string ms_str("5.2ms");
       common::Time ms(ms_str);
-      if (ms.NDeltas(common::Time("1ms")) != 5) {
+      if ((ms.NDeltas(common::Time("1ms")) != 5) || (ms != common::Time("200us"))) {
         Fail("unexpected '" + ms_str + "' NDeltas '" + "1ms" + "' != 5");
       }
-      if ((ms.NDeltasNext(common::Time("1ms")) != 5) || (ms != common::Time("200us"))) {
-        Fail("unexpected '" + ms_str + "' NDeltasNext '" + "1ms" + "' != 5");
-      }
 
       ms = ms_str;
-      if (ms.NDeltas(common::Time("5ms")) != 1) {
-        Fail("unexpected '" + ms_str + "' NDeltas '" + "5ms" + "' != 1");
-      }
-      if ((ms.NDeltasNext(common::Time("5ms"), common::Time("5us")) != 1) ||
+      if ((ms.NDeltas(common::Time("5ms"), common::Time("5us")) != 1) ||
           (ms != common::Time("205us"))) {
-        Fail("unexpected '" + ms_str + "' NDeltasNext '" + "5ms" + "' != 1");
+        Fail("unexpected '" + ms_str + "' NDeltas '" + "5ms, 5us" + "' != 1");
       }
 
       ms = ms_str;
-      if (ms.NDeltas(common::Time("30us")) != 173) {
+      if ((ms.NDeltas(common::Time("30us")) != 173) || (ms != common::Time("10us"))) {
         Fail("unexpected '" + ms_str + "' NDeltas '" + "30us" + "' != 173");
-      }
-      if ((ms.NDeltasNext(common::Time("30us")) != 173) || (ms != common::Time("10us"))) {
-        Fail("unexpected '" + ms_str + "' NDeltasNext '" + "30us" + "' != 173");
       }
     }
 

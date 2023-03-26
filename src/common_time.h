@@ -56,18 +56,23 @@ public:
   Time& operator*=(size_t s) { time_ *= s; return *this; }
   Time operator*(size_t s) const { return Time(time_ * s); }
 
-  // Return the number of entire time 'delta's spanned by 'this' time.
-  size_t NDeltas (const Time& delta) const {
-    return time_ / delta.time_;
+  // Return the maximum number of entire time 'delta's that sum to <=
+  // 'this' time. Set 'this' time to equal the time not spanned by
+  // these deltas. That is, return 'this' / 'delta' and set 'this' =
+  // 'this' % 'delta'.
+  size_t NDeltas (const Time& delta) {
+    size_t tmp = time_;
+    time_ %= delta.time_;
+    return tmp / delta.time_;
   }
 
-  // Return the number of entire time 'delta's spanned by 'this'
-  // time. Set 'this' time to equal the time not spanned by an entire
-  // time 'delta' plus 'next'.
-  size_t NDeltasNext (const Time& delta, const common::Time& next = Time()) {
-    size_t w = time_ / delta.time_;
-    time_ = (time_ % delta.time_) + next.time_;
-    return w;
+  // Return the maximum number of entire time 'delta's that sum to <=
+  // ('this' + 'inc') time. Set 'this' time to equal the time not
+  // spanned by these deltas. That is, return ('this' + 'inc') /
+  // 'delta' and set 'this' = ('this' + 'inc') % 'delta'.
+  size_t NDeltas (const Time& delta, const common::Time& inc) {
+    time_ += inc.time_;
+    return NDeltas(delta);
   }
 
   // Return the integral part of the time value in the given 'unit'.
