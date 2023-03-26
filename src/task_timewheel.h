@@ -85,12 +85,19 @@ public:
   };
 
 public:
+  enum class ControlState {
+    RUNNING, DRAINING, PAUSING, PAUSED, STOPPING, STOPPED };
+  static const std::string& ControlStateToName(const ControlState state);
+
   // Construct the pool. The pool starts in the PAUSED state.
   TaskTimewheelPool(const size_t worker_count_, const size_t time_bucket_count);
 
   // Destroy the pool. Any tasks remaining in the pool are dequeued
   // and destroyed.
   ~TaskTimewheelPool();
+
+  // Return the current state of the pool.
+  ControlState State() const { return control_state_; }
 
   // Stop the pool after the current time-step completes. Any tasks
   // beyond the current time-step will not be invoked. Once stopped
@@ -142,10 +149,6 @@ public:
 
 private:
   friend class TimewheelControlTask;
-
-  enum class ControlState {
-    RUNNING, DRAINING, PAUSING, PAUSED, STOPPING, STOPPED };
-  static const std::string& ControlStateToName(const ControlState state);
 
   void WorkerThread();
   bool HandleControl();
