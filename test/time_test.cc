@@ -184,6 +184,50 @@ main(int argc, char **argv)
       }
     }
 
+    // / and /=
+    {
+      const std::string m_str("123ms");
+      common::Time m(m_str);
+      if ((m / 1) != common::Time(m_str)) {
+        Fail("unexpected '" + m_str + "' / 1 != '123ms'");
+      }
+      m /= 1;
+      if (m != common::Time(m_str)) {
+        Fail("unexpected '" + m_str + "' /= 1 != '123ms'");
+      }
+
+      m = m_str;
+      if ((m / 2) != common::Time("61.5ms")) {
+        Fail("unexpected '" + m_str + "' / 2 != '61.5ms'");
+      }
+      m /= 2;
+      if (m != common::Time("61.5ms")) {
+        Fail("unexpected '" + m_str + "' /= 2 != '61.5ms'");
+      }
+    }
+
+    // % and %=
+    {
+      const std::string m_str("123us");
+      common::Time m(m_str);
+      if ((m % 1) != common::Time()) {
+        Fail("unexpected '" + m_str + "' % 1 != '0us'");
+      }
+      m %= 1;
+      if (m != common::Time()) {
+        Fail("unexpected '" + m_str + "' %= 1 != '0us'");
+      }
+
+      m = m_str;
+      if ((m % 20) != common::Time("3us")) {
+        Fail("unexpected '" + m_str + "' % 20 != '3us'");
+      }
+      m %= 20;
+      if (m != common::Time("3us")) {
+        Fail("unexpected '" + m_str + "' %= 20 != '3us'");
+      }
+    }
+
     // Count
     {
       const std::string c_str("1.123h");

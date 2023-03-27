@@ -52,9 +52,13 @@ public:
   Time operator+(const Time& rhs) const { return Time(time_ + rhs.time_); }
   Time operator-(const Time& rhs) const { return Time(time_ - rhs.time_); }
 
-  // Scale / multiple time by an integer.
+  // Multiple/divide/modulo time by an integer.
   Time& operator*=(size_t s) { time_ *= s; return *this; }
   Time operator*(size_t s) const { return Time(time_ * s); }
+  Time& operator/=(size_t s) { time_ /= s; return *this; }
+  Time operator/(size_t s) const { return Time(time_ / s); }
+  Time& operator%=(size_t s) { time_ %= s; return *this; }
+  Time operator%(size_t s) const { return Time(time_ % s); }
 
   // Return the maximum number of entire time 'delta's that sum to <=
   // 'this' time. Set 'this' time to equal the time not spanned by
