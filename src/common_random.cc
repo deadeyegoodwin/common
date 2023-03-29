@@ -1,6 +1,6 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 
-#include "random.h"
+#include "common_random.h"
 
 namespace common {
 

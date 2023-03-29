@@ -2,8 +2,8 @@
 
 #include <cstdlib>
 #include <sstream>
-#include "error.h"
-#include "settings.h"
+#include "common_error.h"
+#include "common_settings.h"
 
 namespace common {
 

@@ -3,8 +3,8 @@
 #include <cerrno>
 #include <cstring>
 #include <mutex>
-#include "error.h"
-#include "logger.h"
+#include "common_error.h"
+#include "common_logger.h"
 
 namespace common {
 

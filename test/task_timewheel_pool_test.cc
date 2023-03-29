@@ -7,8 +7,8 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
-#include "random.h"
-#include "task_timewheel.h"
+#include "common_random.h"
+#include "common_task_timewheel.h"
 
 namespace {
 

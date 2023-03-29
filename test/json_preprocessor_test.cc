@@ -3,7 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include "json_preprocessor.h"
+#include "common_json_preprocessor.h"
 
 namespace {
 

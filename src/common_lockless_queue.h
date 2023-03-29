@@ -1,7 +1,7 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 #pragma once
 
-#include "spinlock.h"
+#include "common_spinlock.h"
 
 extern "C" {
 #include "ck_fifo.h"

@@ -1,7 +1,7 @@
 // Copyright 2023, David Goodwin. All rights reserved.
 
-#include "error.h"
-#include "json_preprocessor.h"
+#include "common_error.h"
+#include "common_json_preprocessor.h"
 
 namespace common {
 

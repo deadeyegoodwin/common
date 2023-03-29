@@ -3,8 +3,8 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include "common_error.h"
 #include "common_time.h"
-#include "error.h"
 
 namespace {
 

@@ -7,9 +7,9 @@
 #include <mutex>
 #include <thread>
 #include <vector>
-#include "barrier.h"
-#include "error.h"
-#include "lockless_queue.h"
+#include "common_barrier.h"
+#include "common_error.h"
+#include "common_lockless_queue.h"
 
 namespace common {
 
