@@ -273,7 +273,9 @@ TaskTimewheelPool::WorkerThread()
   LocklessMultiQueuePoolAllocator entry_allocator;
 
   // Pause the pool at the start...
-  HandleControl();
+  if (!HandleControl()) {
+    return;
+  }
 
   // The "work loop" for each thread. Thread first tries queue for the
   // current bucket, if that is empty it then process input_queue_ to
@@ -397,7 +399,15 @@ TaskTimewheelPool::HandleControl()
     control_cv_.wait(control_lk, [this]() -> bool {
       return control_state_ != ControlState::PAUSED; });
 
-    return true;
+    // If pool was stopped while in the paused state it is very
+    // important that we don't return and instead fall-through and
+    // handle the STOPPING immediately. This will cause the workers to
+    // then exit without doing any more work. If we instead return
+    // here when in the stopping state, then the workers will do one
+    // more time-step of work before stopping.
+    if (control_state_ != ControlState::STOPPING) {
+      return true;
+    }
   }
 
   // Stop this thread if in STOPPING state. This is the only place
