@@ -2,7 +2,11 @@
 
 cmake_minimum_required(VERSION 3.18)
 
-project(common LANGUAGES CXX)
+project(
+  common
+  LANGUAGES CXX
+  VERSION 0.1
+)
 
 include(CMakeDependentOption)
 include(ExternalProject)
@@ -54,6 +58,21 @@ target_include_directories(
 )
 
 #
+# common version
+#
+configure_file(src/common_version.h.in common_version.h)
+
+add_library(
+  common-version INTERFACE
+)
+
+target_include_directories(
+  common-version
+  INTERFACE
+    ${PROJECT_BINARY_DIR}
+)
+
+#
 # common library
 #
 add_library(
@@ -91,10 +110,12 @@ set_target_properties(
 target_link_libraries(
   common-library
   PUBLIC
-    Threads::Threads
     nlohmann_json::nlohmann_json
-    ${COMMON_ASAN_FLAGS}
     ck-library
+    common-version
+  PRIVATE
+    Threads::Threads
+    ${COMMON_ASAN_FLAGS}
 )
 
 #

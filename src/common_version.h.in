@@ -1,0 +1,20 @@
+// Copyright 2023, David Goodwin. All rights reserved.
+#pragma once
+
+#include <string>
+#include <sstream>
+
+namespace common {
+
+#define COMMON_VERSION_MAJOR @common_VERSION_MAJOR@
+#define COMMON_VERSION_MINOR @common_VERSION_MINOR@
+
+std::string
+VersionToString()
+{
+  std::stringstream sstr;
+  sstr << "common version " << COMMON_VERSION_MAJOR << "." << COMMON_VERSION_MINOR;
+  return sstr.str();
+}
+
+} // namespace common
