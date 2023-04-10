@@ -131,31 +131,10 @@ public:
   virtual void Log(const std::string& msg, size_t indent=0, bool endline=true) override;
 
 private:
-  friend StreamLogger& operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&));
-  friend StreamLogger& operator<<(const std::shared_ptr<StreamLogger>& logger,
-                                  std::ostream& (*os)(std::ostream&));
   void LogTimestamp();
 
   std::ofstream ofs_;
   std::ostream& out_stream_;
 };
-
-template <class T>
-StreamLogger& operator<<(StreamLogger& logger, const T& t)
-{
-  logger.out_stream_ << t;
-  return logger;
-}
-
-template <class T>
-StreamLogger& operator<<(const std::shared_ptr<StreamLogger>& logger, const T& t)
-{
-  logger->out_stream_ << t;
-  return *logger;
-}
-
-// Handle std::endl
-StreamLogger& operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&));
-StreamLogger& operator<<(const std::shared_ptr<StreamLogger>& logger, std::ostream& (*os)(std::ostream&));
 
 } // namespace common

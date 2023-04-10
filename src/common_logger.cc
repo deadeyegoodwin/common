@@ -96,20 +96,6 @@ StreamLogger::LogTimestamp()
   }
 }
 
-StreamLogger&
-operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&))
-{
-  logger.out_stream_ << os;
-  return logger;
-}
-
-StreamLogger&
-operator<<(const std::shared_ptr<StreamLogger>& logger, std::ostream& (*os)(std::ostream&))
-{
-  logger->out_stream_ << os;
-  return *logger;
-}
-
 void
 StreamLogger::Log(const std::string& msg, size_t indent, bool endline)
 {
