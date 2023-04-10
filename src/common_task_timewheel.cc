@@ -39,32 +39,48 @@ TaskTimewheelPool::Stop()
   {
     std::unique_lock<std::mutex> control_lk(control_mu_);
 
-    // Pausing is a transient state that we must wait to complete before
-    // attempting to transition to running state.
-    control_cv_.wait(control_lk, [this]() -> bool {
-      return control_state_ != ControlState::PAUSING; });
+    // Already stopped. All pool threads will/were joined by earlier
+    // call to Stop() that transitioned us into STOPPED state, so can
+    // just return.
+    if (control_state_ == ControlState::STOPPED) {
+      return true;
+    }
+
+    // If already stopping, wait for completion. The only possible
+    // transition is STOPPING -> STOPPED. All pool threads will/were
+    // joined by earlier call to Stop() that transitioned us into
+    // STOPPED state, so can just return.
+    if (control_state_ == ControlState::STOPPING) {
+      control_cv_.wait(control_lk, [this]() -> bool {
+        return control_state_ == ControlState::STOPPED; });
+      return true;
+    }
+
+    // Can only enter STOPPING from PAUSED, so keep trying to pause
+    // until successful.
+    while (control_state_ != ControlState::PAUSED) {
+      control_lk.unlock();
+      if (!Pause()) {
+        return false;
+      }
+      control_lk.lock();
+    }
 
     switch (control_state_) {
-    case ControlState::STOPPED:
-      return true;
-
+    case ControlState::DRAINING:
     case ControlState::PAUSING:
+    case ControlState::RUNNING:
+    case ControlState::STOPPED:
+    case ControlState::STOPPING:
       throw common::Exception(
-        "unexpected PAUSING state in TaskTimewheelPool::Stop()");
+        "unexpected non-PAUSED state in TaskTimewheelPool::Stop()");
       return false;
 
-      // If not already STOPPING, enter STOPPING state and fall-through
-      // to wait for completion of stop.
-    case ControlState::DRAINING:
+      // If PAUSED, enter STOPPING state and wait for STOPPED.
     case ControlState::PAUSED:
-    case ControlState::RUNNING:
       control_state_ = ControlState::STOPPING;
       control_state_needs_handle_ = true;
       control_cv_.notify_all();
-      // fall-through
-
-      // If already stopping, wait for completion.
-    case ControlState::STOPPING:
       control_cv_.wait(control_lk, [this]() -> bool {
         return control_state_ != ControlState::STOPPING; });
       break;
@@ -405,6 +421,17 @@ TaskTimewheelPool::HandleControl()
     // then exit without doing any more work. If we instead return
     // here when in the stopping state, then the workers will do one
     // more time-step of work before stopping.
+    //
+    // We can only do this conditional return because we ensure that
+    // any transition to STOPPING can only happend from PAUSED. For
+    // example, we cannot transition from RUNNING to STOPPING. If we
+    // did allow PAUSED -> RUNNING -> STOPPING, then when changing to
+    // RUNNING, some (but not all) threads could release from the
+    // above cv and then return, while others would not release until
+    // after the change to STOPPING and so not return here and instead
+    // wait at the below barrier for the other threads that will never
+    // arrive (because they returned and will be waiting at
+    // 'next_time_step_barrier_'.
     if (control_state_ != ControlState::STOPPING) {
       return true;
     }

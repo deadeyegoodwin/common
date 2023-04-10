@@ -29,12 +29,15 @@ namespace common {
 // from class TaskTimewheelPool::Task.
 //
 // TaskTimewheelPool::Task::Invoke() is called to execute each Task
-// during the appropriate time-step. If Invoke() returns true,
-// indicating that the task has taken ownership of its own Task
-// object, then TaskTimewheelPool does not perform any futher action
-// on that task. If Invoke() returns false then TaskTimewheelPool
-// retains ownership of the task, however, because TaskTimewheelPool
-// has no futher use for the task, it will simply delete it.
+// during the appropriate time-step. All Tasks within a timestep will
+// have their Invoke() function called before any Tasks within a later
+// timestep, but the order of Invoke() calls within a timestep can not
+// be specified. If Invoke() returns true, indicating that the task
+// has taken ownership of its own Task object, then TaskTimewheelPool
+// does not perform any futher action on that task. If Invoke()
+// returns false then TaskTimewheelPool retains ownership of the task,
+// however, because TaskTimewheelPool has no futher use for the task,
+// it will simply delete it.
 //
 class TaskTimewheelPool {
 public:
@@ -58,11 +61,12 @@ public:
     virtual bool Invoke(
       uint64_t time_step, LocklessMultiQueueAllocator& allocator) = 0;
 
-    // Enqueue a task at relative 'time_delta'. Tasks can be enqueued at
-    // the current time (time_delta == 0), but all pool threads may not
-    // be available to process those tasks. Preferred usage it so always
-    // enqueue tasks at a future time (time_delta > 0). 'allocator' is
-    // the LocklessMultiQueue allocator to use when enqueuing the task.
+    // Enqueue a task at relative 'time_delta'. Tasks can be enqueued
+    // at the current time (time_delta == 0), but all pool threads may
+    // not be available to process those tasks. Preferred usage is so
+    // always enqueue tasks at a future time (time_delta >
+    // 0). 'allocator' is the LocklessMultiQueue allocator to use when
+    // enqueuing the task (use 'allocator' passed to Invoke()).
     void Enqueue(std::unique_ptr<Task>& task, uint32_t time_delta,
                  LocklessMultiQueueAllocator& allocator) {
       pool_->Enqueue(task, time_delta, allocator);
@@ -99,12 +103,14 @@ public:
   // Return the current state of the pool.
   ControlState State() const { return control_state_; }
 
-  // Stop the pool after the current time-step completes. Any tasks
-  // beyond the current time-step will not be invoked. Once stopped
-  // the pool cannot be restarted. Function returns when pool is
-  // stopped. Returns false if pool is in a state that does not
-  // allowing stopping. Calling this function from Task::Invoke is
-  // unsupported and causes undefined behavior.
+  // Stop the pool after the current time-step completes. If the pool
+  // is currently paused, the pool will stop immeidately, before any
+  // tasks are invoked. Even if the pool is not currently paused, no
+  // tasks beyond those in the currently executing time-step will be
+  // invoked. Once stopped the pool cannot be restarted. Function
+  // returns when pool is stopped. Returns false if pool is in a state
+  // that does not allowing stopping. Calling this function from
+  // Task::Invoke is unsupported and causes undefined behavior.
   bool Stop();
 
   // Drain all in-flight tasks from the pool. Function returns when
@@ -118,14 +124,15 @@ public:
   bool Drain();
 
   // Pause pool after it completes invocation of all tasks in the
-  // current time-step. If 'block' is true, function returns when pool
-  // is paused or when another thread calls Run(), Drain() or
-  // Stop(). If 'block' is false function returns immediately. Calling
-  // Pause() does not prevent additional tasks from being
-  // enqueued. Returns false if pool is in a state that does not
-  // allowing pausing. Calling this function from Task::Invoke is
-  // supported for 'block' == false, calling with 'block' == true is
-  // unsupported and causes undefined behavior (likely deadlock).
+  // currently executing time-step. If 'block' is true, function
+  // returns after pool is paused or when another thread calls Run(),
+  // Drain() or Stop(). If 'block' is false function returns
+  // immediately. Calling Pause() does not prevent additional tasks
+  // from being enqueued. Returns false if pool is in a state that
+  // does not allowing pausing. Calling this function from
+  // Task::Invoke is supported for 'block' == false, calling with
+  // 'block' == true is unsupported and causes undefined behavior
+  // (likely deadlock).
   bool Pause(bool block = true);
 
   // Run/unpause the pool. Function returns when all pool threads have
@@ -148,9 +155,50 @@ public:
                LocklessMultiQueueAllocator& allocator);
 
 private:
-  friend class TimewheelControlTask;
-
   void WorkerThread();
+
+  // Handle control manages coordinating and updating the pool threads
+  // in response to state changes initiated by Stop(), Drain(),
+  // Pause() and Run(). The five functions work together to ensure
+  // that only the following state transitions are allowed. Limiting
+  // the state transitions in this way ensures that there is no
+  // deadlock or other error.
+  //
+  // From RUNNING can enter the DRAINING (from Drain()) or PAUSING
+  // (from Pause() or Stop()) states. Note that RUNNING cannot go
+  // directly to STOPPING (see HandleControl()) for why this is not
+  // allowed).
+  //
+  //   RUNNING -> DRAINING
+  //           -> PAUSING
+  //
+  // From DRAINING can enter RUNNING (from Run()) or PAUSING (from
+  // Pause()). As with RUNNING, DRAINING cannot go directly to
+  // STOPPING (see HandleControl()) for why this is not allowed).
+  //
+  //   DRAINING -> RUNNING
+  //            -> PAUSING
+  //
+  // From PAUSING the only transition is to PAUSED (managed in
+  // HandleControl()). If Stop(), Drain() or Run() is invoked while in
+  // PAUSING state, those methods will block until the transition to
+  // PAUSED is complete.
+  //
+  //   PAUSING -> PAUSED
+  //
+  // From PAUSED can transition to RUNNING, DRAINING, or STOPPING. The
+  // transition from PAUSED -> STOPPING is handled specially in
+  // HandleControl() to ensure that no additional tasks are executed.
+  //
+  //   PAUSED -> RUNNING
+  //          -> PAUSING
+  //          -> STOPPING
+  //
+  // From STOPPING can only transition to STOPPED. The only transition
+  // into STOPPING is from PAUSED and there are no transitions out of
+  // STOPPED.
+  //
+  //   STOPPING -> STOPPED
   bool HandleControl();
 
   LocklessMultiQueueAllocator default_allocator_;
