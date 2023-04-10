@@ -18,6 +18,7 @@ IndentMultiline(const std::string& str, const size_t indent);
 //
 class Logger {
 public:
+  // Logging levels
   enum class Level {
     OFF = 0,  // Suppress all logging
     LOW = 1,  // Show only LOW volume logging
@@ -25,8 +26,16 @@ public:
     HIGH = 3  // Show LOW, MED and HIGH volume logging
   };
 
-  Logger() : filter_level_(Level::LOW) { }
-  Logger(const Level filter_level) : filter_level_(filter_level) { }
+  // Types of timestamp to emit with each logged line. It is up to the
+  // derived class to decide how to implement each of these levels.
+  enum class Timestamp {
+    NONE = 0,
+    COMPACT = 1
+  };
+
+  Logger() : filter_level_(Level::LOW), timestamp_kind_(Timestamp::NONE) { }
+  Logger(const Level filter_level, const Timestamp timestamp_kind = Timestamp::NONE) :
+    filter_level_(filter_level), timestamp_kind_(timestamp_kind) { }
   Logger(const Logger& other) = default;
   virtual ~Logger() = default;
 
@@ -34,6 +43,10 @@ public:
   // it is at a level higher than FilterLevel().
   Level FilterLevel() const { return filter_level_; }
   void SetFilterLevel(const Level filter_level) { filter_level_ = filter_level; }
+
+  // Get or set the timestamp kind.
+  Timestamp TimestampKind() const { return timestamp_kind_; }
+  void SetTimestampKind(const Timestamp timestamp_kind) { timestamp_kind_ = timestamp_kind; }
 
   // Log a message if 'fitler_level' is no greater than FilterLevel().
   void Log(Level filter_level, const std::string& msg, size_t indent=0, bool endline=true) {
@@ -61,6 +74,7 @@ public:
 
 protected:
   Level filter_level_;
+  Timestamp timestamp_kind_;
 };
 
 //
@@ -103,10 +117,11 @@ public:
   // Logger holds a reference to 'of' so the caller is required to
   // ensure that the lifetime of 'of' extends over the lifetime of
   // 'this' logger.
-  StreamLogger(Logger::Level filter_level, std::ostream& of);
+  StreamLogger(Logger::Level filter_level, const Timestamp timestamp_kind, std::ostream& of);
 
   // Open named file and stream logging to that file.
-  StreamLogger(Logger::Level filter_level, const std::string& filename, bool buffered = true);
+  StreamLogger(Logger::Level filter_level, const Timestamp timestamp_kind,
+               const std::string& filename, bool buffered = true);
 
   // Copy settings from existing logger, but override any existing
   // logging destination to instead log to provided ostream or file.
@@ -119,6 +134,8 @@ private:
   friend StreamLogger& operator<<(StreamLogger& logger, std::ostream& (*os)(std::ostream&));
   friend StreamLogger& operator<<(const std::shared_ptr<StreamLogger>& logger,
                                   std::ostream& (*os)(std::ostream&));
+  void LogTimestamp();
+
   std::ofstream ofs_;
   std::ostream& out_stream_;
 };
