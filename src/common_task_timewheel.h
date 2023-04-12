@@ -9,6 +9,7 @@
 #include <vector>
 #include "common_barrier.h"
 #include "common_error.h"
+#include "common_lockless_barrier.h"
 #include "common_lockless_queue.h"
 
 namespace common {
@@ -227,7 +228,7 @@ private:
   LocklessMultiQueue<Task> input_queue_ CK_CC_CACHELINE;
   uint32_t in_flight_task_count_ CK_CC_CACHELINE;
 
-  Barrier next_time_step_barrier_; // FIXME lockless barrier
+  LocklessBarrier next_time_step_barrier_;
 };
 
 } // namespace common
