@@ -10,25 +10,38 @@ namespace common {
 //
 // Synchronization barrier.
 //
+// Same API as common::LocklessBarrier so that the two classes can be
+// used interchangeably.
+//
 class Barrier {
  public:
-  explicit Barrier(size_t cnt) :
+  explicit Barrier(unsigned int cnt) :
     threshold_(cnt), count_(cnt), generation_(0) { }
 
-  // Wait until 'cnt' threads have reached the barrier.
+  // Wait until 'threshold_' threads have reached the barrier.
   //
   // 'pre' is a void(size_t) function that is called just before the
-  // thread enters the barrier. May be nullptr.
+  // thread enters the barrier. 'pre' is passed a size_t "count"
+  // argument that indicates the order of this thread in reaching the
+  // barrier. "count" indicates how many additional threads must reach
+  // the barrier after this one. There is no ordering guarantee for
+  // 'pre' function invocation, that is, pre(0) may be called before
+  // pre(1), for example. It is possible that 'post' for thread A may
+  // be called before 'pre' for thread B, but for a given thread,
+  // 'pre' will always' be called before 'post'. 'pre' may be nullptr
+  // to indicate that there is no "pre" function.
   //
   // 'post' is a void(size_t) function that is called when the thread
-  // exits the barrier. For the thread that releases the barrier
-  // (count == 0), 'post' is called before the other threads are
-  // released. May be nullptr.
-  //
-  // Both are passed a size_t "count" argument that indicates how many
-  // additional threads must reach the barrier after this one. Thus
-  // "count" == 0 is passed if this thread is the last thread to reach
-  // (and therefore release) the barrier.
+  // exits the barrier. 'post' is passed a size_t "count" argument
+  // that indicates the order of this thread in reaching the
+  // barrier. "count" indicates how many additional threads must reach
+  // the barrier after this one. There is no ordering guarantee for
+  // 'post' function invocation, except that the thread that releases
+  // the barrier will call 'post' with count == 0 before any other
+  // threads are released from the barrier. Thus it is guaranteed
+  // that, 'post(0)' will be called before any other 'post'
+  // call. 'post' may be nullptr to indicate that there is no "post"
+  // function.
   void
   Wait(std::function<void(size_t)>&& pre, std::function<void(size_t)>&& post) {
     std::unique_lock<std::mutex> lk(mu_);
@@ -58,8 +71,8 @@ class Barrier {
  private:
   std::mutex mu_;
   std::condition_variable cv_;
-  const size_t threshold_;
-  size_t count_;
+  const unsigned int threshold_;
+  unsigned int count_;
   size_t generation_;
 };
 
