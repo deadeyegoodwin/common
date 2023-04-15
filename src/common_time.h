@@ -12,6 +12,10 @@ namespace common {
 //
 class Time {
 public:
+  enum class TimeFormat {
+    FLAT, HMS
+  };
+
   enum class TimeUnit {
     HOUR, MINUTE, SECOND, MILLISECOND, MICROSECOND
   };
@@ -83,12 +87,15 @@ public:
   size_t Count(TimeUnit unit) const {
     return time_ / TimeUnitToMicroseconds(unit); }
 
-  // Return string representation in 'unit' with exactly 'precision'
-  // decimal places. The parameter defaults (MILLISECOND / 3) are
-  // defined so that the full precision of any valid time will be
-  // displayed.
-  std::string ToString(Time::TimeUnit unit = Time::TimeUnit::MILLISECOND,
-                       int precision = 3) const;
+  // Return string representation in 'format'. FLAT format returns
+  // time in 'unit' with exactly 'precision' decimal places. The
+  // parameter defaults (MILLISECOND / 3) are defined so that the full
+  // precision of any valid time will be displayed. HMS format returns
+  // time as hour/minute/'unit' components, for example, if 'unit' is
+  // SECOND, 12h34m56.789s.
+  std::string ToString(
+    TimeFormat format = TimeFormat::FLAT, TimeUnit unit = TimeUnit::MILLISECOND,
+    int precision = 3) const;
 
 private:
   size_t TimeValueFromString(std::string time_str) const;

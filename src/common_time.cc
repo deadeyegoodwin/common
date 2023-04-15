@@ -115,11 +115,28 @@ Time::TimeValueFromString(std::string time_str) const
 }
 
 std::string
-Time::ToString(Time::TimeUnit unit, int precision) const
+Time::ToString(Time::TimeFormat format, Time::TimeUnit unit, int precision) const
 {
   std::stringstream ss;
-  const double t = time_ / (double)TimeUnitToMicroseconds(unit);
+  size_t stime = time_;
+
+  switch (format) {
+  case TimeFormat::FLAT:
+    break;
+
+  case TimeFormat::HMS: {
+    const size_t h = stime / TimeUnitToMicroseconds(TimeUnit::HOUR);
+    stime -= h * TimeUnitToMicroseconds(TimeUnit::HOUR);
+    const size_t m = stime / TimeUnitToMicroseconds(TimeUnit::MINUTE);
+    stime -= m * TimeUnitToMicroseconds(TimeUnit::MINUTE);
+    ss << h << TimeUnitToName(TimeUnit::HOUR)
+       << std::setw(2) << std::setfill('0') << m << TimeUnitToName(TimeUnit::MINUTE);
+  } break;
+  }
+
+  const double t = stime / (double)TimeUnitToMicroseconds(unit);
   ss << std::fixed << std::setprecision(precision) << t << TimeUnitToName(unit);
+
   return ss.str();
 }
 
