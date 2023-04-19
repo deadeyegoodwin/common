@@ -105,7 +105,7 @@ main(int argc, char **argv)
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
           std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
+        pool.Enqueue(std::move(delay_task), random((size_t)0, time_bucket_cnt - 1), allocator);
       }
       pool.Drain();
 
@@ -126,7 +126,7 @@ main(int argc, char **argv)
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
           std::to_string(i), std::chrono::milliseconds(random(0, 20)), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
+        pool.Enqueue(std::move(delay_task), random((size_t)0, time_bucket_cnt - 1), allocator);
       }
       pool.Drain();
 
@@ -216,7 +216,7 @@ main(int argc, char **argv)
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
           std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, 3 * time_bucket_cnt), allocator);
+        pool.Enqueue(std::move(delay_task), random((size_t)0, 3 * time_bucket_cnt), allocator);
       }
       pool.Drain();
 
@@ -310,7 +310,7 @@ main(int argc, char **argv)
       for (size_t i = 0; i < task_cnt; ++i) {
         auto delay_task = std::make_unique<DelayTask>(
           std::to_string(i), std::chrono::milliseconds(0), test_atomic);
-        pool.Enqueue(std::move(delay_task), random(0, time_bucket_cnt - 1), allocator);
+        pool.Enqueue(std::move(delay_task), random((size_t)0, time_bucket_cnt - 1), allocator);
       }
       pool.Pause();
       pool.Drain();

@@ -17,9 +17,27 @@ public:
 
   int32_t Seed() const { return seed_; }
 
-  // Returns a random integer in the range [min, max], inclusive.
+  // Returns a random int32_t in the range [min, max], inclusive.
   int32_t operator()(const int32_t min, const int32_t max) {
     std::uniform_int_distribution<int32_t> distribution(min, max);
+    return distribution(generator_);
+  }
+
+  // Returns a random uint32_t in the range [min, max], inclusive.
+  uint32_t operator()(const uint32_t min, const uint32_t max) {
+    std::uniform_int_distribution<uint32_t> distribution(min, max);
+    return distribution(generator_);
+  }
+
+  // Returns a random int64_t in the range [min, max], inclusive.
+  int64_t operator()(const int64_t min, const int64_t max) {
+    std::uniform_int_distribution<int64_t> distribution(min, max);
+    return distribution(generator_);
+  }
+
+  // Returns a random uint64_t in the range [min, max], inclusive.
+  uint64_t operator()(const uint64_t min, const uint64_t max) {
+    std::uniform_int_distribution<uint64_t> distribution(min, max);
     return distribution(generator_);
   }
 
