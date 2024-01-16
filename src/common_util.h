@@ -12,6 +12,18 @@ namespace common {
 //
 // String utilities
 //
+static inline std::string& ToLower(std::string &s) {
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c){ return std::tolower(c); });
+  return s;
+}
+
+static inline std::string& ToUpper(std::string &s) {
+  std::transform(s.begin(), s.end(), s.begin(),
+                 [](unsigned char c){ return std::toupper(c); });
+  return s;
+}
+
 static inline std::string& TrimLeft(std::string &s) {
   s.erase(s.begin(), std::find_if(s.begin(), s.end(),
                                   std::not1(std::ptr_fun<int, int>(std::isspace))));
