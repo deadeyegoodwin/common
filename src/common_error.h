@@ -2,6 +2,7 @@
 #pragma once
 
 #include <exception>
+#include <sstream>
 #include <string>
 
 namespace common {
@@ -19,5 +20,21 @@ public:
 private:
   const std::string msg_;
 };
+
+//
+// Exception defines.
+//
+// These avoid the evaluation of the message expression if exception
+// is not thrown.
+//
+#define THROWIF(P, M)                                                   \
+  do {                                                                  \
+    const bool p = (P);                                                 \
+    if (p) {                                                            \
+      std::stringstream sstr;                                           \
+      sstr << __FILE__ << ':' << __LINE__ << " " << (M);                \
+      throw common::Exception(sstr.str());                              \
+    }                                                                   \
+  } while (false)
 
 } // namespace common
