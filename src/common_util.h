@@ -6,6 +6,9 @@
 #include <functional>
 #include <locale>
 #include <string>
+#include <vector>
+
+#include "common_error.h"
 
 namespace common {
 
@@ -56,6 +59,65 @@ static inline std::string& Trim(std::string &s) {
 
 static inline std::string Trim(std::string &&sm) {
   return TrimLeft(std::move(TrimRight(sm)));
+}
+
+// Parse string representation of delimiter separated list of signed
+// integers into a vector<int64_t>. Throws common::Exception if the
+// string representation cannot be parsed into signed integers.
+static inline std::vector<int64_t>
+StringToSignedIntegerVector(std::string s, const std::string& delimiter)
+{
+  std::vector<int64_t> v;
+  size_t spos = 0, epos = 0;
+  while ((epos = s.find(delimiter, spos)) != std::string::npos) {
+    std::string token = s.substr(spos, epos);
+    Trim(token);
+    if (token.empty()) {
+      throw common::Exception("empty string cannot be converted to integer");
+    }
+
+    std::string::size_type idx;
+    long long ll = std::stoll(token, &idx);
+    if (idx != token.size()) {
+      throw common::Exception("unexpected non-integer characters");
+    }
+    v.push_back(ll);
+    spos = epos + delimiter.size();
+  }
+
+  std::string token = s.substr(spos);
+  Trim(token);
+  if (token.empty()) {
+    throw common::Exception("empty string cannot be converted to integer");
+  }
+
+  std::string::size_type idx;
+  long long ll = std::stoll(token, &idx);
+  if (idx != token.size()) {
+    throw common::Exception("unexpected non-integer characters");
+  }
+  v.push_back(ll);
+
+  return v;
+}
+
+// Parse string representation of delimiter separated list of signed
+// integers into a vector<uint64_t>. Throws common::Exception if the
+// string representation cannot be parsed as signed integers or if any
+// of the parsed integers is negative.
+static inline std::vector<uint64_t>
+StringToUnsignedIntegerVector(std::string s, const std::string& delimiter)
+{
+  std::vector<uint64_t> v;
+  auto sv = StringToSignedIntegerVector(s, delimiter);
+  for (long long svi : sv) {
+    if (svi < 0) {
+      throw common::Exception("negative integers not allowed");
+    }
+    v.push_back(uint64_t(svi));
+  }
+
+  return v;
 }
 
 } // namespace common
