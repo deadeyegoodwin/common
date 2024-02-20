@@ -27,6 +27,13 @@ private:
 // These avoid the evaluation of the message expression if exception
 // is not thrown.
 //
+#define THROW(M)                                                        \
+  do {                                                                  \
+    std::stringstream sstr;                                             \
+    sstr << __FILE__ << ':' << __LINE__ << " " << (M);                  \
+    throw common::Exception(sstr.str());                                \
+  } while (false)
+
 #define THROWIF(P, M)                                                   \
   do {                                                                  \
     const bool p = (P);                                                 \
