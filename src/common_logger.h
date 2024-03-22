@@ -81,29 +81,34 @@ protected:
 // Logging defines.
 //
 // These avoid the evaluation of the message expression if the message
-// is not going to be logger.
+// is not going to be logger. The _IE versions of the macros allow the
+// indent (I) and endline (E) to be specified. The non _IE versions
+// use indent=0 and enline=true.
 //
-#define LOGGER_LOGLOW(L, M)                                             \
+#define LOGGER_LOGLOW(L, M) LOGGER_LOGLOW_IE(L, M, 0, true)
+#define LOGGER_LOGLOW_IE(L, M, I, E)                                    \
   do {                                                                  \
     common::Logger& logger__ = (L);                                     \
     if (logger__.FilterLevel() >= common::Logger::Level::LOW) {         \
-      logger__.Log(M);                                                  \
+      logger__.Log(M, I, E);                                            \
     }                                                                   \
   } while (false)
 
-#define LOGGER_LOGMED(L, M)                                             \
+#define LOGGER_LOGMED(L, M) LOGGER_LOGMED_IE(L, M, 0, true)
+#define LOGGER_LOGMED_IE(L, M, I, E)                                    \
   do {                                                                  \
     common::Logger& logger__ = (L);                                     \
     if (logger__.FilterLevel() >= common::Logger::Level::MED) {         \
-      logger__.Log(M);                                                  \
+      logger__.Log(M, I, E);                                            \
     }                                                                   \
   } while (false)
 
-#define LOGGER_LOGHIGH(L, M)                                            \
+#define LOGGER_LOGHIGH(L, M) LOGGER_LOGHIGH_IE(L, M, 0, true)
+#define LOGGER_LOGHIGH_IE(L, M, I, E)                                   \
   do {                                                                  \
     common::Logger& logger__ = (L);                                     \
     if (logger__.FilterLevel() >= common::Logger::Level::HIGH) {        \
-      logger__.Log(M);                                                  \
+      logger__.Log(M, I, E);                                            \
     }                                                                   \
   } while (false)
 
