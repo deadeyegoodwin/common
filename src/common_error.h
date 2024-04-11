@@ -29,18 +29,18 @@ private:
 //
 #define THROW(M)                                                        \
   do {                                                                  \
-    std::stringstream sstr;                                             \
-    sstr << __FILE__ << ':' << __LINE__ << " " << (M);                  \
-    throw common::Exception(sstr.str());                                \
+    std::stringstream sstr__;                                             \
+    sstr__ << __FILE__ << ':' << __LINE__ << " " << (M);                  \
+    throw common::Exception(sstr__.str());                                \
   } while (false)
 
 #define THROWIF(P, M)                                                   \
   do {                                                                  \
     const bool p = (P);                                                 \
     if (p) {                                                            \
-      std::stringstream sstr;                                           \
-      sstr << __FILE__ << ':' << __LINE__ << " " << (M);                \
-      throw common::Exception(sstr.str());                              \
+      std::stringstream sstr__;                                           \
+      sstr__ << __FILE__ << ':' << __LINE__ << " " << (M);                \
+      throw common::Exception(sstr__.str());                              \
     }                                                                   \
   } while (false)
 
