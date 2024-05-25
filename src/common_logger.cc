@@ -50,9 +50,7 @@ StreamLogger::StreamLogger(Logger::Level filter_level, const Timestamp timestamp
     ofs_.rdbuf()->pubsetbuf(0, 0);
   }
   ofs_.open(filename);
-  if (ofs_.fail()) {
-    throw Exception("unable to open '" + filename + "': " +  std::strerror(errno));
-  }
+  THROWIF(ofs_.fail(), "unable to open '" + filename + "': " +  std::strerror(errno));
 }
 
 StreamLogger::StreamLogger(const Logger& other, std::ostream& of) :
@@ -67,9 +65,7 @@ StreamLogger::StreamLogger(const Logger& other, const std::string& filename, boo
     ofs_.rdbuf()->pubsetbuf(0, 0);
   }
   ofs_.open(filename);
-  if (ofs_.fail()) {
-    throw Exception("unable to open '" + filename + "': " +  std::strerror(errno));
-  }
+  THROWIF(ofs_.fail(), "unable to open '" + filename + "': " +  std::strerror(errno));
 }
 
 void

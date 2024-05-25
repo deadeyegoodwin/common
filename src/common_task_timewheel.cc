@@ -10,12 +10,8 @@ TaskTimewheelPool::TaskTimewheelPool(const size_t worker_count, const size_t buc
   in_flight_task_count_(0), next_time_step_barrier_(worker_count)
 
 {
-  if (worker_count_ == 0) {
-    throw Exception("TaskTimewheelPool requires at least 1 worker");
-  }
-  if (bucket_count_ <= 1) {
-    throw Exception("TaskTimewheelPool requires at least 2 time buckets");
-  }
+  THROWIF(worker_count_ == 0, "TaskTimewheelPool requires at least 1 worker");
+  THROWIF(bucket_count_ <= 1, "TaskTimewheelPool requires at least 2 time buckets");
 
   // Pause the pool at the start...
   control_state_ = ControlState::PAUSING;
@@ -72,8 +68,7 @@ TaskTimewheelPool::Stop()
     case ControlState::RUNNING:
     case ControlState::STOPPED:
     case ControlState::STOPPING:
-      throw common::Exception(
-        "unexpected non-PAUSED state in TaskTimewheelPool::Stop()");
+      THROW("unexpected non-PAUSED state in TaskTimewheelPool::Stop()");
       return false;
 
       // If PAUSED, enter STOPPING state and wait for STOPPED.
@@ -86,10 +81,9 @@ TaskTimewheelPool::Stop()
       break;
     }
 
-    if (control_state_ != ControlState::STOPPED) {
-      throw common::Exception("expected STOPPED state in TaskTimewheelPool::Stop(), "
-                              "got " + ControlStateToName(control_state_));
-    }
+    THROWIF(control_state_ != ControlState::STOPPED,
+            "expected STOPPED state in TaskTimewheelPool::Stop(), got " +
+            ControlStateToName(control_state_));
   }
 
   for (auto& thd : work_threads_) {
@@ -129,8 +123,7 @@ TaskTimewheelPool::Drain()
 
   case ControlState::PAUSED:
   case ControlState::PAUSING:
-    throw common::Exception(
-      "unexpected PAUSED/PAUSING state in TaskTimewheelPool::Drain()");
+    THROW("unexpected PAUSED/PAUSING state in TaskTimewheelPool::Drain()");
     return false;
 
     // If running, enter DRAINING state and fall-through to wait for
@@ -207,8 +200,7 @@ TaskTimewheelPool::Run()
     return false;
 
   case ControlState::PAUSING:
-    throw common::Exception(
-      "unexpected PAUSING state in TaskTimewheelPool::Run()");
+    THROW("unexpected PAUSING state in TaskTimewheelPool::Run()");
     return false;
 
   case ControlState::RUNNING:
@@ -454,11 +446,8 @@ TaskTimewheelPool::HandleControl()
     return false;
   }
 
-  throw common::Exception(
-    "TaskTimewheelPool worker encountered unexpected control state: " +
-    ControlStateToName(control_state_));
-
-  __builtin_unreachable();
+  THROW("TaskTimewheelPool worker encountered unexpected control state: " +
+        ControlStateToName(control_state_));
 }
 
 } // namespace common

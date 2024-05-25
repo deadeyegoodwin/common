@@ -6,9 +6,7 @@ namespace common {
 
 TaskPool::TaskPool(const size_t worker_count)
 {
-  if (worker_count == 0) {
-    throw Exception("TaskPool requires at least 1 worker");
-  }
+  THROWIF(worker_count == 0, "TaskPool requires at least 1 worker");
 
   // The "work loop" for each thread. Waits for new task to be
   // available, executes the task and then places the task on the

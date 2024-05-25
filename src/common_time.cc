@@ -31,17 +31,14 @@ Time::TimeUnitFromName(const std::string& name)
     }
   }
 
-  throw common::Exception("unknown time unit '" + name + "'");
+  THROW("unknown time unit '" + name + "'");
 }
 
 const std::string&
 Time::TimeUnitToName(const TimeUnit time_unit)
 {
   auto it = tunamemap.find(time_unit);
-  if (it == tunamemap.end()) {
-    throw common::Exception("internal");
-  }
-
+  THROWIF(it == tunamemap.end(), "internal");
   return it->second.first;
 }
 
@@ -49,10 +46,7 @@ size_t
 Time::TimeUnitToMicroseconds(const TimeUnit time_unit)
 {
   auto it = tunamemap.find(time_unit);
-  if (it == tunamemap.end()) {
-    throw common::Exception("internal");
-  }
-
+  THROWIF(it == tunamemap.end(), "internal");
   return it->second.second;
 }
 
@@ -62,15 +56,12 @@ Time::TimeValueFromString(std::string time_str) const
 {
   Trim(time_str);
 
-  if (time_str.find_first_of("-") != std::string::npos) {
-    throw common::Exception("time value must be non-negative, '" + time_str + "'");
-  }
+  THROWIF(time_str.find_first_of("-") != std::string::npos,
+          "time value must be non-negative, '" + time_str + "'");
 
   // Time unit...
   const size_t upos = time_str.find_first_of("hmsu");
-  if (upos == std::string::npos) {
-    throw common::Exception("time value must have unit, '" + time_str + "'");
-  }
+  THROWIF(upos == std::string::npos, "time value must have unit, '" + time_str + "'");
 
   // Get the unit, and the number of microseconds in each increment of
   // that unit of time.
@@ -91,21 +82,15 @@ Time::TimeValueFromString(std::string time_str) const
   // Allow at most 6 fractional digits of precision. This simplifies
   // the following logic because TimeUnitToMicrosecond for all units
   // will be evenly divisible by 10^6.
-  if (fraction.size() > 6) {
-    throw common::Exception(
-      "time value can have at most 6 decimal digits of precision, '" +
-      time_str + "'");
-  }
+  THROWIF(fraction.size() > 6,
+          "time value can have at most 6 decimal digits of precision, '" + time_str + "'");
 
   size_t time_us = (whole.empty()) ? 0 : (std::stoull(whole) * us_per_unit);
 
   size_t us_per_digit = us_per_unit;
   for (auto& digit : fraction) {
-    if (us_per_digit < 10) {
-      throw common::Exception(
-        "time value cannot be represented, minimum precision 1us, '" +
-        time_str + "'");
-    }
+    THROWIF(us_per_digit < 10,
+        "time value cannot be represented, minimum precision 1us, '" + time_str + "'");
 
     us_per_digit /= 10;
     time_us += us_per_digit * (digit - '0');

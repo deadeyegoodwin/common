@@ -24,23 +24,20 @@ private:
 //
 // Exception defines.
 //
-// These avoid the evaluation of the message expression if exception
-// is not thrown.
-//
 #define THROW(M)                                                        \
   do {                                                                  \
-    std::stringstream sstr__;                                             \
-    sstr__ << __FILE__ << ':' << __LINE__ << " " << (M);                  \
-    throw common::Exception(sstr__.str());                                \
+    std::stringstream sstr__;                                           \
+    sstr__ << __FILE__ << ':' << __LINE__ << " " << (M);                \
+    throw common::Exception(sstr__.str());                              \
   } while (false)
 
 #define THROWIF(P, M)                                                   \
   do {                                                                  \
     const bool p = (P);                                                 \
     if (p) {                                                            \
-      std::stringstream sstr__;                                           \
-      sstr__ << __FILE__ << ':' << __LINE__ << " " << (M);                \
-      throw common::Exception(sstr__.str());                              \
+      std::stringstream sstr__;                                         \
+      sstr__ << __FILE__ << ':' << __LINE__ << " " << (M);              \
+      throw common::Exception(sstr__.str());                            \
     }                                                                   \
   } while (false)
 

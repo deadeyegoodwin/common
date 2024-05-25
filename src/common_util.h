@@ -72,30 +72,23 @@ StringToSignedIntegerVector(std::string s, const std::string& delimiter)
   while ((epos = s.find(delimiter, spos)) != std::string::npos) {
     std::string token = s.substr(spos, epos);
     Trim(token);
-    if (token.empty()) {
-      throw common::Exception("empty string cannot be converted to integer");
-    }
+    THROWIF(token.empty(), "empty string cannot be converted to integer");
 
     std::string::size_type idx;
     long long ll = std::stoll(token, &idx);
-    if (idx != token.size()) {
-      throw common::Exception("unexpected non-integer characters");
-    }
+    THROWIF(idx != token.size(), "unexpected non-integer characters");
+
     v.push_back(ll);
     spos = epos + delimiter.size();
   }
 
   std::string token = s.substr(spos);
   Trim(token);
-  if (token.empty()) {
-    throw common::Exception("empty string cannot be converted to integer");
-  }
+  THROWIF(token.empty(), "empty string cannot be converted to integer");
 
   std::string::size_type idx;
   long long ll = std::stoll(token, &idx);
-  if (idx != token.size()) {
-    throw common::Exception("unexpected non-integer characters");
-  }
+  THROWIF(idx != token.size(), "unexpected non-integer characters");
   v.push_back(ll);
 
   return v;
@@ -111,9 +104,7 @@ StringToUnsignedIntegerVector(std::string s, const std::string& delimiter)
   std::vector<uint64_t> v;
   auto sv = StringToSignedIntegerVector(s, delimiter);
   for (long long svi : sv) {
-    if (svi < 0) {
-      throw common::Exception("negative integers not allowed");
-    }
+    THROWIF(svi < 0, "negative integers not allowed");
     v.push_back(uint64_t(svi));
   }
 

@@ -45,10 +45,7 @@ JsonPreprocessor::ProcessTemplates(const json& j)
     const std::string& name = it.key();
     const json& jt = it.value();
 
-    if (templates_.find(name) != templates_.end()) {
-      throw common::Exception("duplicate template name '" + name + "'");
-    }
-
+    THROWIF(templates_.find(name) != templates_.end(), "duplicate template name '" + name + "'");
     templates_.emplace(name, jt);
   }
 }
@@ -57,27 +54,22 @@ void
 JsonPreprocessor::Process(json& j, size_t rec_count)
 {
   // 'rec_count' is used to detect a cycle in the templates.
-  if (rec_count == 0) {
-    throw common::Exception("preprocessor failed, likely due to circular template dependencies");
-  }
+  THROWIF(rec_count == 0, "preprocessor failed, likely due to circular template dependencies");
 
   // If 'j' is an object that contains the 'preprocessor-template'
   // element, replace that object with a copy of the template and then
   // recursively revisit the "new" 'j'.
   if (j.is_object() && j.contains("preprocessor-template")) {
     for (auto& it : j.items()) {
-      if ((it.key() != "preprocessor-template") &&
-          (it.key() != "merge") && (it.key() != "overwrite")) {
-        throw common::Exception(
-          std::string("preprocessor object can only contain 'preprocessor-template', ") +
-          "'merge', and 'overwrite' members, found '" + it.key() + "'");
-      }
+      THROWIF((it.key() != "preprocessor-template") &&
+              (it.key() != "merge") && (it.key() != "overwrite"),
+              std::string("preprocessor object can only contain 'preprocessor-template', ") +
+              "'merge', and 'overwrite' members, found '" + it.key() + "'");
     }
 
     const std::string& template_name = j["preprocessor-template"];
-    if (templates_.find(template_name) == templates_.end()) {
-      throw common::Exception("unknown template '" + template_name + "'");
-    }
+    THROWIF(templates_.find(template_name) == templates_.end(),
+            "unknown template '" + template_name + "'");
 
     json jnew(templates_[template_name]);
     Process(jnew, rec_count - 1);
