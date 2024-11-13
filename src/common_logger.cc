@@ -12,15 +12,41 @@
 namespace common {
 
 std::string
-IndentMultiline(const std::string& str, const size_t indent)
+IndentMultiline(const std::string& istr, const size_t indent, const size_t width)
 {
-  std::string mstr(indent, ' ');
+  std::string str;
+
+  // First split if requested...
+  if (width > 0) {
+    std::string sstr(istr);
+    size_t current_pos = 0;
+    while ((current_pos + width) < sstr.length()) {
+      int n = sstr.rfind(' ', current_pos + width);
+      if (n != int(std::string::npos)) {
+         sstr.replace(n, 1, "\n\t");
+         current_pos = n + 2;
+      } else {
+        current_pos += width;
+      }
+    }
+    str = std::move(sstr);
+  }
+  else {
+    str = istr;
+  }
+
+  // Then indent...
+  if (indent == 0) {
+    return str;
+  }
+
   std::size_t pos = 0;
   std::size_t prev_pos;
 
   std::string rstr(indent, ' ');
   rstr.insert(rstr.begin(), '\n');
 
+  std::string mstr(indent, ' ');
   mstr.reserve(str.size());
   while (true) {
     prev_pos = pos;
@@ -29,7 +55,7 @@ IndentMultiline(const std::string& str, const size_t indent)
       break;
     mstr.append(str, prev_pos, pos - prev_pos);
     mstr += rstr;
-    pos += 1; // strlen(\n)
+    pos += 1; // strlen('\n')
   }
 
   mstr.append(str, prev_pos, str.size() - prev_pos);

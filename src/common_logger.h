@@ -9,9 +9,11 @@
 
 namespace common {
 
-// Utility method to indent every line of a string.
+// Utility method to indent every line of a string, after optionally
+// splitting it to 'width' lines. If 'width' is 0 the line is not
+// split, if 'indent' is 0 the line(s) are not indented.
 std::string
-IndentMultiline(const std::string& str, const size_t indent);
+IndentMultiline(const std::string& str, const size_t indent, const size_t width = 0);
 
 //
 // Logger
