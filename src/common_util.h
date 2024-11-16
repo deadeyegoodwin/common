@@ -16,94 +16,71 @@ namespace common {
 //
 // String utilities
 //
+
+// In-place to-lowercase.
 static inline std::string& ToLower(std::string &s) {
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c){ return std::tolower(c); });
   return s;
 }
 
+// In-place to-uppercase.
 static inline std::string& ToUpper(std::string &s) {
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c){ return std::toupper(c); });
   return s;
 }
 
+// In-place left trim.
 static inline std::string& TrimLeft(std::string &s) {
   s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](char c) { return !std::isspace(c); }));
   return s;
 }
 
+// In-place left trim.
 static inline std::string TrimLeft(std::string &&sm) {
   std::string s = std::move(sm);
 	return common::TrimLeft(s);
 }
 
+// In-place right trim.
 static inline std::string& TrimRight(std::string &s) {
   s.erase(std::find_if(s.rbegin(), s.rend(), [](char c) { return !std::isspace(c); }).base(), s.end());
   return s;
 }
 
+// In-place right trim.
 static inline std::string TrimRight(std::string &&sm) {
   std::string s = std::move(sm);
 	return common::TrimRight(s);
 }
 
+// In-place trim.
 static inline std::string& Trim(std::string &s) {
   return TrimLeft(TrimRight(s));
 }
 
+// In-place trim.
 static inline std::string Trim(std::string &&sm) {
   return TrimLeft(std::move(TrimRight(sm)));
 }
 
+// Split a string into multiple newline-separated ('\n') lines where
+// each line is at most 'width' characters wide. Will attempt to split
+// the line at space (' ') character but if that is not possible will
+// insert a hyphen ('-'). Returns a split version of 's', 's' is not
+// modified.
+std::string Split(const std::string& s, const size_t width);
+
 // Parse string representation of delimiter separated list of signed
 // integers into a vector<int64_t>. Throws common::Exception if the
 // string representation cannot be parsed into signed integers.
-static inline std::vector<int64_t>
-StringToSignedIntegerVector(std::string s, const std::string& delimiter)
-{
-  std::vector<int64_t> v;
-  size_t spos = 0, epos = 0;
-  while ((epos = s.find(delimiter, spos)) != std::string::npos) {
-    std::string token = s.substr(spos, epos);
-    Trim(token);
-    THROWIF(token.empty(), "empty string cannot be converted to integer");
-
-    std::string::size_type idx;
-    long long ll = std::stoll(token, &idx);
-    THROWIF(idx != token.size(), "unexpected non-integer characters");
-
-    v.push_back(ll);
-    spos = epos + delimiter.size();
-  }
-
-  std::string token = s.substr(spos);
-  Trim(token);
-  THROWIF(token.empty(), "empty string cannot be converted to integer");
-
-  std::string::size_type idx;
-  long long ll = std::stoll(token, &idx);
-  THROWIF(idx != token.size(), "unexpected non-integer characters");
-  v.push_back(ll);
-
-  return v;
-}
+std::vector<int64_t> StringToSignedIntegerVector(std::string s, const std::string& delimiter);
 
 // Parse string representation of delimiter separated list of signed
 // integers into a vector<uint64_t>. Throws common::Exception if the
 // string representation cannot be parsed as signed integers or if any
 // of the parsed integers is negative.
-static inline std::vector<uint64_t>
-StringToUnsignedIntegerVector(std::string s, const std::string& delimiter)
-{
-  std::vector<uint64_t> v;
-  auto sv = StringToSignedIntegerVector(s, delimiter);
-  for (long long svi : sv) {
-    THROWIF(svi < 0, "negative integers not allowed");
-    v.push_back(uint64_t(svi));
-  }
-
-  return v;
-}
+std::vector<uint64_t> StringToUnsignedIntegerVector(std::string s, const std::string& delimiter);
 
 } // namespace common

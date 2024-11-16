@@ -12,6 +12,40 @@ find_package(Threads REQUIRED)
 set(TEST_SOURCE_DIR ${CMAKE_SOURCE_DIR}/test)
 
 #
+# Utils
+#
+add_executable(
+  util-test
+  util_test.cc
+)
+add_dependencies(common-test util-test)
+
+target_compile_features(util-test PRIVATE cxx_std_17)
+target_compile_options(
+  util-test
+  PRIVATE
+    -Wall -Wextra -Werror -Wno-unused-parameter
+    ${COMMON_ASAN_FLAGS}
+)
+
+set_target_properties(
+  util-test
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    OUTPUT_NAME util_test
+)
+
+target_link_libraries(
+  util-test
+  PRIVATE
+    ${COMMON_ASAN_FLAGS}
+    common-library
+)
+
+add_test(NAME util-test COMMAND util_test)
+
+
+#
 # JsonPreprocessor
 #
 add_executable(

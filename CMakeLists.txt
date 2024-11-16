@@ -77,13 +77,14 @@ target_include_directories(
 #
 add_library(
   common-library STATIC
-  src/common_time.cc
   src/common_json_preprocessor.cc
   src/common_logger.cc
   src/common_random.cc
   src/common_settings.cc
   src/common_task_pool.cc
   src/common_task_timewheel.cc
+  src/common_time.cc
+  src/common_util.cc
 )
 
 target_compile_features(common-library PRIVATE cxx_std_17)
