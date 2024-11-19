@@ -80,6 +80,14 @@ Indent(std::string& s, const std::vector<size_t> indents)
   }
 }
 
+std::string
+DuplicateAndIndent(const std::string& s, const std::vector<size_t> indents)
+{
+  std::string str(s);
+  Indent(str, indents);
+  return str;
+}
+
 std::vector<int64_t>
 StringToSignedIntegerVector(std::string s, const std::string& delimiter)
 {

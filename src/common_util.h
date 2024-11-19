@@ -79,7 +79,7 @@ std::string Join(const std::vector<size_t>& els, const std::string& delimiter);
 // insert a hyphen ('-'). String is modified in place.
 void Split(std::string& s, const size_t width);
 
-// Indent every line of a string by inditation given in
+// Indent every line of a string by indentation given in
 // 'indents'. First line is indented by 'indents[0]' spaces, second
 // line is indented by 'indents[1]' spaces, etc. 'indents[-1]' is used
 // for all lines additional lines. String is modified in place.
@@ -90,6 +90,20 @@ void Indent(std::string& s, const std::vector<size_t> indents);
 static inline void Indent(std::string& s, const size_t indent) {
   common::Indent(s, std::vector<size_t>{ indent });
 }
+
+// Indent every line of a string by indentation given in
+// 'indents'. First line is indented by 'indents[0]' spaces, second
+// line is indented by 'indents[1]' spaces, etc. 'indents[-1]' is used
+// for all lines additional lines. String is not modified, a, indented
+// version is returned.
+std::string DuplicateAndIndent(const std::string& s, const std::vector<size_t> indents);
+
+// Indent every line of a string by 'indent' spaces. String is not
+// modified, a, indented version is returned.
+static inline std::string DuplicateAndIndent(const std::string& s, const size_t indent) {
+  return common::DuplicateAndIndent(s, std::vector<size_t>{ indent });
+}
+
 
 // Parse string representation of delimiter separated list of signed
 // integers into a vector<int64_t>. Throws common::Exception if the
