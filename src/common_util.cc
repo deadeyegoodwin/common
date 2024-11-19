@@ -5,6 +5,40 @@
 
 namespace common {
 
+std::string
+Join(const std::vector<size_t>& els, const std::string& delimiter)
+{
+  std::string str;
+  bool first = true;
+  for (const auto& s : els) {
+    if (!first) {
+      str += delimiter;
+    }
+
+    str += std::to_string(s);
+    first = false;
+  }
+
+  return str;
+}
+
+std::string
+Join(const std::vector<std::string>& els, const std::string& delimiter)
+{
+  std::string str;
+  bool first = true;
+  for (const auto& s : els) {
+    if (!first) {
+      str += delimiter;
+    }
+
+    str += s;
+    first = false;
+  }
+
+  return str;
+}
+
 void
 Split(std::string& s, const size_t width)
 {
@@ -20,6 +54,29 @@ Split(std::string& s, const size_t width)
       s.insert(current_pos + width - 1, "-\n");
       current_pos += width + 1;
     }
+  }
+}
+
+void
+Indent(std::string& s, const std::vector<size_t> indents)
+{
+  THROWIF(indents.empty(), "at least 1 indent is required");
+
+  size_t indent_pos = 0;
+  size_t pos = 0;
+
+  s.insert(pos, indents[indent_pos], ' ');
+  while (true) {
+    if (indent_pos < (indents.size() - 1)) {
+      indent_pos += 1;
+    }
+
+    pos = s.find('\n', pos);
+    if ((pos == std::string::npos) || (pos >= (s.length() - 1))) {
+      break;
+    }
+    pos += 1; // strlen('\n')
+    s.insert(pos, indents[indent_pos], ' ');
   }
 }
 

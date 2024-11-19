@@ -65,11 +65,31 @@ static inline std::string Trim(std::string &&sm) {
   return TrimLeft(std::move(TrimRight(sm)));
 }
 
+// Join a vector of strings using a 'delimiter' and return the
+// resulting string.
+std::string Join(const std::vector<std::string>& els, const std::string& delimiter);
+
+// Join a vector of size_t using a 'delimiter' and return the
+// resulting string.
+std::string Join(const std::vector<size_t>& els, const std::string& delimiter);
+
 // Split a string into multiple newline-separated ('\n') lines where
 // each line is at most 'width' characters wide. Will attempt to split
 // the line at space (' ') character but if that is not possible will
 // insert a hyphen ('-'). String is modified in place.
 void Split(std::string& s, const size_t width);
+
+// Indent every line of a string by inditation given in
+// 'indents'. First line is indented by 'indents[0]' spaces, second
+// line is indented by 'indents[1]' spaces, etc. 'indents[-1]' is used
+// for all lines additional lines. String is modified in place.
+void Indent(std::string& s, const std::vector<size_t> indents);
+
+// Indent every line of a string by 'indent' spaces. String is
+// modified in place.
+static inline void Indent(std::string& s, const size_t indent) {
+  common::Indent(s, std::vector<size_t>{ indent });
+}
 
 // Parse string representation of delimiter separated list of signed
 // integers into a vector<int64_t>. Throws common::Exception if the

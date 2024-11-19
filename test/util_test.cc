@@ -38,7 +38,7 @@ main(int argc, char **argv)
         { "abc", "abc", "ABC" },
         { "ABC", "abc", "ABC" },
         { "AbC", "abc", "ABC" },
-        { "AbC\ndEf", "abc\ndef", "ABC\nDEF" },
+        { "AbC\ndEf", "abc\ndef", "ABC\nDEF" }
       };
 
       for (auto& s : tul) {
@@ -144,6 +144,47 @@ main(int argc, char **argv)
         common::Split(ss, std::get<1>(s));
         if (ss != std::get<2>(s)) {
           Fail("unexpected split (" + std::to_string(std::get<1>(s)) + ") of\n" +
+               std::get<0>(s) + "\ngot:\n" + ss + "\nexpected:\n" + std::get<2>(s) + "\n");
+        }
+      }
+    }
+
+    // Test string indent (single indent value)
+    {
+      std::vector<std::tuple<std::string, size_t, std::string>> tsi {
+        { "", 2, "  " },
+        { "\n", 2, "  \n" },
+        { "\n\n", 1, " \n \n" },
+        { " \n\n ", 1, "  \n \n  " },
+        { "\tabc def \n1234", 4, "    \tabc def \n    1234" },
+        { "\tabc def \n1234\n", 4, "    \tabc def \n    1234\n" },
+        { "\tabc def \n1234\nx", 4, "    \tabc def \n    1234\n    x" }
+      };
+
+      for (auto& s : tsi) {
+        std::string ss(std::get<0>(s));
+        common::Indent(ss, std::get<1>(s));
+        if (ss != std::get<2>(s)) {
+          Fail("unexpected indent (" + std::to_string(std::get<1>(s)) + ") of\n" +
+               std::get<0>(s) + "\ngot:\n" + ss + "\nexpected:\n" + std::get<2>(s) + "\n");
+        }
+      }
+    }
+
+    // Test string indent (per-line indent values)
+    {
+      std::vector<std::tuple<std::string, std::vector<size_t>, std::string>> tsli {
+        { "abc def \n1234", {1, 2, 3}, " abc def \n  1234" },
+        { "abc\n123\nxyz", {1, 2}, " abc\n  123\n  xyz" },
+        { "abc\n123\nxyz\n", {1, 2}, " abc\n  123\n  xyz\n" },
+        { "abc\n123\nxyz\n ", {1, 2}, " abc\n  123\n  xyz\n   " }
+      };
+
+      for (auto& s : tsli) {
+        std::string ss(std::get<0>(s));
+        common::Indent(ss, std::get<1>(s));
+        if (ss != std::get<2>(s)) {
+          Fail("unexpected indent (" + common::Join(std::get<1>(s), ", ") + ") of\n" +
                std::get<0>(s) + "\ngot:\n" + ss + "\nexpected:\n" + std::get<2>(s) + "\n");
         }
       }
