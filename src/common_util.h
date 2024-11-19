@@ -68,9 +68,8 @@ static inline std::string Trim(std::string &&sm) {
 // Split a string into multiple newline-separated ('\n') lines where
 // each line is at most 'width' characters wide. Will attempt to split
 // the line at space (' ') character but if that is not possible will
-// insert a hyphen ('-'). Returns a split version of 's', 's' is not
-// modified.
-std::string Split(const std::string& s, const size_t width);
+// insert a hyphen ('-'). String is modified in place.
+void Split(std::string& s, const size_t width);
 
 // Parse string representation of delimiter separated list of signed
 // integers into a vector<int64_t>. Throws common::Exception if the

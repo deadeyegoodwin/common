@@ -140,7 +140,8 @@ main(int argc, char **argv)
       };
 
       for (auto& s : tss) {
-        const auto ss = common::Split(std::get<0>(s), std::get<1>(s));
+        std::string ss(std::get<0>(s));
+        common::Split(ss, std::get<1>(s));
         if (ss != std::get<2>(s)) {
           Fail("unexpected split (" + std::to_string(std::get<1>(s)) + ") of\n" +
                std::get<0>(s) + "\ngot:\n" + ss + "\nexpected:\n" + std::get<2>(s) + "\n");

@@ -5,25 +5,22 @@
 
 namespace common {
 
-std::string
-Split(const std::string& s, const size_t width)
+void
+Split(std::string& s, const size_t width)
 {
   THROWIF(width <= 1, "minimum string split width is 2");
 
-  std::string sstr(s);
   size_t current_pos = 0;
-  while ((current_pos + width) < sstr.length()) {
-    int n = sstr.rfind(' ', current_pos + width);
+  while ((current_pos + width) < s.length()) {
+    int n = s.rfind(' ', current_pos + width);
     if ((n != int(std::string::npos)) && (n >= (int)current_pos)) {
-      sstr.replace(n, 1, "\n");
+      s.replace(n, 1, "\n");
       current_pos = n + 1;
     } else {
-      sstr.insert(current_pos + width - 1, "-\n");
+      s.insert(current_pos + width - 1, "-\n");
       current_pos += width + 1;
     }
   }
-
-  return sstr;
 }
 
 std::vector<int64_t>
