@@ -24,7 +24,7 @@ target_compile_features(util-test PRIVATE cxx_std_17)
 target_compile_options(
   util-test
   PRIVATE
-    -Wall -Wextra -Werror -Wno-unused-parameter
+    -Wall -Wextra -Werror -Wsign-conversion -Wno-unused-parameter
     ${COMMON_ASAN_FLAGS}
 )
 
@@ -58,7 +58,7 @@ target_compile_features(json-preprocessor-test PRIVATE cxx_std_17)
 target_compile_options(
   json-preprocessor-test
   PRIVATE
-    -Wall -Wextra -Werror -Wno-unused-parameter
+    -Wall -Wextra -Werror -Wsign-conversion -Wno-unused-parameter
     ${COMMON_ASAN_FLAGS}
 )
 
@@ -115,7 +115,7 @@ target_compile_features(time-test PRIVATE cxx_std_17)
 target_compile_options(
   time-test
   PRIVATE
-    -Wall -Wextra -Werror -Wno-unused-parameter
+    -Wall -Wextra -Werror -Wsign-conversion -Wno-unused-parameter
     ${COMMON_ASAN_FLAGS}
 )
 
@@ -150,7 +150,7 @@ target_compile_features(task-timewheel-pool-test PRIVATE cxx_std_17)
 target_compile_options(
   task-timewheel-pool-test
   PRIVATE
-    -Wall -Wextra -Werror -Wno-unused-parameter
+    -Wall -Wextra -Werror -Wsign-conversion -Wno-unused-parameter
     ${COMMON_ASAN_FLAGS}
 )
 
