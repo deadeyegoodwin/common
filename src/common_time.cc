@@ -93,7 +93,7 @@ Time::TimeValueFromString(std::string time_str) const
         "time value cannot be represented, minimum precision 1us, '" + time_str + "'");
 
     us_per_digit /= 10;
-    time_us += us_per_digit * (digit - '0');
+    time_us += us_per_digit * size_t(digit - '0');
   }
 
   return time_us;

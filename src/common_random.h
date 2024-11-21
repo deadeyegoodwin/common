@@ -13,7 +13,7 @@ class Random {
 public:
   // With no argument or 0 (zero) argument, the random generator is
   // initialized with a random seed.
-  Random(int32_t seed=0) : seed_((seed == 0) ? rdev_() : seed), generator_(seed_) { }
+  Random(int32_t seed=0) : seed_((seed == 0) ? int32_t(rdev_()) : seed), generator_(uint32_t(seed_)) { }
 
   int32_t Seed() const { return seed_; }
 

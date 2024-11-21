@@ -46,8 +46,8 @@ Split(std::string& s, const size_t width)
 
   size_t current_pos = 0;
   while ((current_pos + width) < s.length()) {
-    int n = s.rfind(' ', current_pos + width);
-    if ((n != int(std::string::npos)) && (n >= (int)current_pos)) {
+    size_t n = s.rfind(' ', current_pos + width);
+    if ((n != std::string::npos) && (n >= current_pos)) {
       s.replace(n, 1, "\n");
       current_pos = n + 1;
     } else {
@@ -123,7 +123,7 @@ StringToUnsignedIntegerVector(std::string s, const std::string& delimiter)
 {
   std::vector<uint64_t> v;
   auto sv = StringToSignedIntegerVector(s, delimiter);
-  for (long long svi : sv) {
+  for (int64_t svi : sv) {
     THROWIF(svi < 0, "negative integers not allowed");
     v.push_back(uint64_t(svi));
   }

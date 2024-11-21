@@ -91,7 +91,7 @@ target_compile_features(common-library PRIVATE cxx_std_17)
 target_compile_options(
   common-library
   PRIVATE
-    -Wall -Wextra -Werror -Wno-unused-parameter
+    -Wall -Wextra -Wsign-conversion -Werror -Wno-unused-parameter
     ${COMMON_ASAN_FLAGS}
 )
 
