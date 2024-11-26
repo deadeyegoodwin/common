@@ -163,10 +163,33 @@ main(int argc, char **argv)
 
       for (auto& s : tsi) {
         std::string ss(std::get<0>(s));
-        common::Indent(ss, std::get<1>(s));
+        common::Indent(ss, std::get<1>(s), true /* indent_empty_lines */);
         if (ss != std::get<2>(s)) {
           Fail("unexpected indent (" + std::to_string(std::get<1>(s)) + ") of\n" +
-               std::get<0>(s) + "\ngot:\n" + ss + "\nexpected:\n" + std::get<2>(s) + "\n");
+               std::get<0>(s) + "\ngot:\n'" + ss + "'\nexpected:\n'" + std::get<2>(s) + "'\n");
+        }
+      }
+    }
+
+    // Test string indent (single indent value, do not indent empty lines)
+    {
+      std::vector<std::tuple<std::string, size_t, std::string>> tsi {
+        { "", 2, "" },
+        { "\na", 2, "\n  a" },
+        { "\n\nb", 1, "\n\n b" },
+        { "c\nd\n", 1, " c\n d\n" },
+        { "\n", 2, "\n" },
+        { "\n\n", 1, "\n\n" },
+        { " \n\n ", 1, "  \n\n  " },
+        { "\n\n\n", 1, "\n\n\n" }
+      };
+
+      for (auto& s : tsi) {
+        std::string ss(std::get<0>(s));
+        common::Indent(ss, std::get<1>(s), false /* indent_empty_lines */);
+        if (ss != std::get<2>(s)) {
+          Fail("unexpected indent (" + std::to_string(std::get<1>(s)) + ") of\n" +
+               std::get<0>(s) + "\ngot:\n'" + ss + "'\nexpected:\n'" + std::get<2>(s) + "'\n");
         }
       }
     }

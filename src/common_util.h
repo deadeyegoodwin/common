@@ -83,12 +83,12 @@ void Split(std::string& s, const size_t width);
 // 'indents'. First line is indented by 'indents[0]' spaces, second
 // line is indented by 'indents[1]' spaces, etc. 'indents[-1]' is used
 // for all lines additional lines. String is modified in place.
-void Indent(std::string& s, const std::vector<size_t> indents);
+void Indent(std::string& s, const std::vector<size_t> indents, bool indent_empty_lines = false);
 
 // Indent every line of a string by 'indent' spaces. String is
 // modified in place.
-static inline void Indent(std::string& s, const size_t indent) {
-  common::Indent(s, std::vector<size_t>{ indent });
+static inline void Indent(std::string& s, const size_t indent, bool indent_empty_lines = false) {
+  common::Indent(s, std::vector<size_t>{ indent }, indent_empty_lines);
 }
 
 // Indent every line of a string by indentation given in
@@ -96,12 +96,14 @@ static inline void Indent(std::string& s, const size_t indent) {
 // line is indented by 'indents[1]' spaces, etc. 'indents[-1]' is used
 // for all lines additional lines. String is not modified, a, indented
 // version is returned.
-std::string DuplicateAndIndent(const std::string& s, const std::vector<size_t> indents);
+std::string DuplicateAndIndent(
+  const std::string& s, const std::vector<size_t> indents, bool indent_empty_lines = false);
 
 // Indent every line of a string by 'indent' spaces. String is not
 // modified, a, indented version is returned.
-static inline std::string DuplicateAndIndent(const std::string& s, const size_t indent) {
-  return common::DuplicateAndIndent(s, std::vector<size_t>{ indent });
+static inline std::string DuplicateAndIndent(
+  const std::string& s, const size_t indent, bool indent_empty_lines = false) {
+  return common::DuplicateAndIndent(s, std::vector<size_t>{ indent }, indent_empty_lines);
 }
 
 

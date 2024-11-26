@@ -58,17 +58,20 @@ Split(std::string& s, const size_t width)
 }
 
 void
-Indent(std::string& s, const std::vector<size_t> indents)
+Indent(std::string& s, const std::vector<size_t> indents, bool indent_empty_lines)
 {
   THROWIF(indents.empty(), "at least 1 indent is required");
 
-  size_t indent_pos = 0;
+  size_t indents_idx = 0;
   size_t pos = 0;
 
-  s.insert(pos, indents[indent_pos], ' ');
-  while (true) {
-    if (indent_pos < (indents.size() - 1)) {
-      indent_pos += 1;
+  do {
+    if (indent_empty_lines || ((pos < s.length()) && (s[pos] != '\n'))) {
+      s.insert(pos, indents[indents_idx], ' ');
+    }
+
+    if (indents_idx < (indents.size() - 1)) {
+      indents_idx += 1;
     }
 
     pos = s.find('\n', pos);
@@ -76,15 +79,14 @@ Indent(std::string& s, const std::vector<size_t> indents)
       break;
     }
     pos += 1; // strlen('\n')
-    s.insert(pos, indents[indent_pos], ' ');
-  }
+  } while (true);
 }
 
 std::string
-DuplicateAndIndent(const std::string& s, const std::vector<size_t> indents)
+DuplicateAndIndent(const std::string& s, const std::vector<size_t> indents, bool indent_empty_lines)
 {
   std::string str(s);
-  Indent(str, indents);
+  Indent(str, indents, indent_empty_lines);
   return str;
 }
 
