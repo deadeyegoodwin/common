@@ -94,6 +94,9 @@ StreamLogger::Log(const std::string& msg, size_t indent, bool endline)
   if (endline) {
     out_stream_ << std::endl;
   }
+  else {
+    out_stream_ << std::flush;
+  }
 }
 
 } // namespace common
